@@ -48,6 +48,7 @@ import {
   Users,
   Pencil,
   Trash2,
+  Download,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -310,15 +311,24 @@ export default function Clients() {
     <div className="flex h-[calc(100vh-3.5rem)]">
       <div className="w-96 border-r flex flex-col">
         <div className="p-4 border-b space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h1 className="text-xl font-semibold" data-testid="text-clients-title">Clients</h1>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" data-testid="button-new-client">
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Client
-                </Button>
-              </DialogTrigger>
+            <div className="flex gap-1">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => window.open("/api/export/clients", "_blank")}
+                data-testid="button-export-clients"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" data-testid="button-new-client">
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Client
+                  </Button>
+                </DialogTrigger>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                   <DialogTitle>Add New Client</DialogTitle>
@@ -427,6 +437,7 @@ export default function Clients() {
                 </form>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

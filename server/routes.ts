@@ -959,7 +959,12 @@ export async function registerRoutes(
 
   app.post("/api/schedule", async (req, res) => {
     try {
-      const validatedData = insertScheduleEventSchema.parse(req.body);
+      const body = {
+        ...req.body,
+        startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
+        endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
+      };
+      const validatedData = insertScheduleEventSchema.parse(body);
       const event = await storage.createScheduleEvent(validatedData);
       res.status(201).json(event);
     } catch (error) {
@@ -973,7 +978,11 @@ export async function registerRoutes(
 
   app.patch("/api/schedule/:id", async (req, res) => {
     try {
-      const event = await storage.updateScheduleEvent(req.params.id, req.body);
+      const body = { ...req.body };
+      if (body.startDate) body.startDate = new Date(body.startDate);
+      if (body.endDate) body.endDate = new Date(body.endDate);
+      
+      const event = await storage.updateScheduleEvent(req.params.id, body);
       if (!event) {
         return res.status(404).json({ error: "Schedule event not found" });
       }
@@ -1554,6 +1563,203 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching activity logs:", error);
       res.status(500).json({ error: "Failed to fetch activity logs" });
+    }
+  });
+
+  // ============ CSV EXPORTS ============
+  const escapeCSVField = (field: any): string => {
+    if (field === null || field === undefined) return "";
+    const str = String(field);
+    if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const formatDate = (date: Date | string | null): string => {
+    if (!date) return "";
+    const d = new Date(date);
+    return d.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" });
+  };
+
+  const formatCurrency = (amount: string | number | null): string => {
+    if (amount === null || amount === undefined) return "$0.00";
+    return `$${Number(amount).toFixed(2)}`;
+  };
+
+  app.get("/api/export/payments", async (req, res) => {
+    try {
+      const payments = await storage.getPayments();
+      const clients = await storage.getClients();
+      const jobs = await storage.getJobs();
+      
+      const clientMap = new Map(clients.map(c => [c.id, c]));
+      const jobMap = new Map(jobs.map(j => [j.id, j]));
+      
+      const headers = ["Invoice Number", "Client Name", "Job Number", "Amount", "Payment Type", "Payment Method", "Status", "Paid Date", "Created Date"];
+      const rows = payments.map(p => {
+        const client = clientMap.get(p.clientId);
+        const job = p.jobId ? jobMap.get(p.jobId) : null;
+        return [
+          escapeCSVField(p.invoiceNumber),
+          escapeCSVField(client?.name || "Unknown"),
+          escapeCSVField(job?.jobNumber || ""),
+          escapeCSVField(formatCurrency(p.amount)),
+          escapeCSVField(p.paymentType),
+          escapeCSVField(p.paymentMethod || ""),
+          escapeCSVField(p.status),
+          escapeCSVField(formatDate(p.paidAt)),
+          escapeCSVField(formatDate(p.createdAt)),
+        ].join(",");
+      });
+      
+      const csv = [headers.join(","), ...rows].join("\n");
+      const filename = `payments-export-${new Date().toISOString().split("T")[0]}.csv`;
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error exporting payments:", error);
+      res.status(500).json({ error: "Failed to export payments" });
+    }
+  });
+
+  app.get("/api/export/products", async (req, res) => {
+    try {
+      const products = await storage.getProducts();
+      
+      const headers = ["SKU", "Name", "Category", "Cost Price", "Sell Price", "Stock on Hand", "Reorder Point", "Is Active"];
+      const rows = products.map(p => [
+        escapeCSVField(p.sku),
+        escapeCSVField(p.name),
+        escapeCSVField(p.category),
+        escapeCSVField(formatCurrency(p.costPrice)),
+        escapeCSVField(formatCurrency(p.sellPrice)),
+        escapeCSVField(p.stockOnHand),
+        escapeCSVField(p.reorderPoint),
+        escapeCSVField(p.isActive ? "Yes" : "No"),
+      ].join(","));
+      
+      const csv = [headers.join(","), ...rows].join("\n");
+      const filename = `inventory-export-${new Date().toISOString().split("T")[0]}.csv`;
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error exporting products:", error);
+      res.status(500).json({ error: "Failed to export products" });
+    }
+  });
+
+  app.get("/api/export/jobs", async (req, res) => {
+    try {
+      const jobs = await storage.getJobs();
+      const clients = await storage.getClients();
+      const users = await storage.getUsers();
+      
+      const clientMap = new Map(clients.map(c => [c.id, c]));
+      const userMap = new Map(users.map(u => [u.id, u]));
+      
+      const headers = ["Job Number", "Client Name", "Job Type", "Site Address", "Fence Style", "Total Length (m)", "Fence Height (mm)", "Total Amount", "Deposit Paid", "Status", "Assigned Installer", "Scheduled Start", "Created Date"];
+      const rows = jobs.map(j => {
+        const client = clientMap.get(j.clientId);
+        const installer = j.assignedInstaller ? userMap.get(j.assignedInstaller) : null;
+        return [
+          escapeCSVField(j.jobNumber),
+          escapeCSVField(client?.name || "Unknown"),
+          escapeCSVField(j.jobType),
+          escapeCSVField(j.siteAddress),
+          escapeCSVField(j.fenceStyle),
+          escapeCSVField(j.totalLength),
+          escapeCSVField(j.fenceHeight),
+          escapeCSVField(formatCurrency(j.totalAmount)),
+          escapeCSVField(j.depositPaid ? "Yes" : "No"),
+          escapeCSVField(j.status),
+          escapeCSVField(installer ? `${installer.firstName} ${installer.lastName}` : ""),
+          escapeCSVField(formatDate(j.scheduledStartDate)),
+          escapeCSVField(formatDate(j.createdAt)),
+        ].join(",");
+      });
+      
+      const csv = [headers.join(","), ...rows].join("\n");
+      const filename = `jobs-export-${new Date().toISOString().split("T")[0]}.csv`;
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error exporting jobs:", error);
+      res.status(500).json({ error: "Failed to export jobs" });
+    }
+  });
+
+  app.get("/api/export/clients", async (req, res) => {
+    try {
+      const clients = await storage.getClients();
+      
+      const headers = ["Name", "Company", "Client Type", "Phone", "Email", "Address", "ABN", "Trade Discount Level", "Created Date"];
+      const rows = clients.map(c => [
+        escapeCSVField(c.name),
+        escapeCSVField(c.companyName),
+        escapeCSVField(c.clientType),
+        escapeCSVField(c.phone),
+        escapeCSVField(c.email),
+        escapeCSVField(c.address),
+        escapeCSVField(c.abn),
+        escapeCSVField(c.tradeDiscountLevel),
+        escapeCSVField(formatDate(c.createdAt)),
+      ].join(","));
+      
+      const csv = [headers.join(","), ...rows].join("\n");
+      const filename = `clients-export-${new Date().toISOString().split("T")[0]}.csv`;
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error exporting clients:", error);
+      res.status(500).json({ error: "Failed to export clients" });
+    }
+  });
+
+  app.get("/api/export/leads", async (req, res) => {
+    try {
+      const leads = await storage.getLeads();
+      const clients = await storage.getClients();
+      const users = await storage.getUsers();
+      
+      const clientMap = new Map(clients.map(c => [c.id, c]));
+      const userMap = new Map(users.map(u => [u.id, u]));
+      
+      const headers = ["Lead Type", "Source", "Stage", "Client Name", "Site Address", "Description", "Fence Style", "Fence Length (m)", "Assigned To", "Created Date"];
+      const rows = leads.map(l => {
+        const client = l.clientId ? clientMap.get(l.clientId) : null;
+        const assignee = l.assignedTo ? userMap.get(l.assignedTo) : null;
+        return [
+          escapeCSVField(l.leadType),
+          escapeCSVField(l.source),
+          escapeCSVField(l.stage),
+          escapeCSVField(client?.name || ""),
+          escapeCSVField(l.siteAddress),
+          escapeCSVField(l.description),
+          escapeCSVField(l.fenceStyle),
+          escapeCSVField(l.fenceLength),
+          escapeCSVField(assignee ? `${assignee.firstName} ${assignee.lastName}` : ""),
+          escapeCSVField(formatDate(l.createdAt)),
+        ].join(",");
+      });
+      
+      const csv = [headers.join(","), ...rows].join("\n");
+      const filename = `leads-export-${new Date().toISOString().split("T")[0]}.csv`;
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error exporting leads:", error);
+      res.status(500).json({ error: "Failed to export leads" });
     }
   });
 

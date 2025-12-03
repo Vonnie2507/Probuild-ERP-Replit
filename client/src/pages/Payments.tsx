@@ -181,7 +181,11 @@ export default function Payments() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" data-testid="button-export">
+          <Button 
+            variant="outline" 
+            data-testid="button-export"
+            onClick={() => window.open("/api/export/payments", "_blank")}
+          >
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>

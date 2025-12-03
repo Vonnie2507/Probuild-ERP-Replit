@@ -32,7 +32,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Filter, LayoutGrid, List } from "lucide-react";
+import { Plus, Search, Filter, LayoutGrid, List, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Lead, Client, InsertLead } from "@shared/schema";
@@ -290,14 +290,23 @@ export default function Leads() {
             Manage enquiries, build quotes, and track conversions
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-new-lead">
-              <Plus className="h-4 w-4 mr-2" />
-              New Lead
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => window.open("/api/export/leads", "_blank")}
+            data-testid="button-export-leads"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-new-lead">
+                <Plus className="h-4 w-4 mr-2" />
+                New Lead
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Create New Lead</DialogTitle>
             </DialogHeader>
@@ -403,8 +412,9 @@ export default function Leads() {
                 </Button>
               </div>
             </form>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="flex items-center gap-4">

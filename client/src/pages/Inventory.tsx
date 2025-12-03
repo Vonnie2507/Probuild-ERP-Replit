@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Package, AlertTriangle, TrendingDown, DollarSign } from "lucide-react";
+import { Package, AlertTriangle, TrendingDown, DollarSign, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Product } from "@shared/schema";
@@ -156,6 +156,14 @@ export default function Inventory() {
             Manage stock levels, pricing, and reorder points
           </p>
         </div>
+        <Button 
+          variant="outline" 
+          onClick={() => window.open("/api/export/products", "_blank")}
+          data-testid="button-export-inventory"
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Export
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

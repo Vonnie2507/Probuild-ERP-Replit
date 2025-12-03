@@ -49,6 +49,7 @@ import {
   Briefcase,
   Pencil,
   Trash2,
+  Download,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -319,6 +320,14 @@ export default function Jobs() {
             <Button variant="outline" size="sm" className="flex-1">
               <Filter className="h-4 w-4 mr-2" />
               Filter
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => window.open("/api/export/jobs", "_blank")}
+              data-testid="button-export-jobs"
+            >
+              <Download className="h-4 w-4" />
             </Button>
           </div>
         </div>
