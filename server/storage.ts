@@ -3,7 +3,7 @@ import { db } from "./db";
 import {
   users, clients, leads, fenceStyles, products, quotes, jobs, bom,
   productionTasks, installTasks, scheduleEvents, payments, notifications,
-  smsLogs, activityLogs, documents,
+  smsLogs, smsConversations, messageRanges, activityLogs, documents,
   type User, type InsertUser,
   type Client, type InsertClient,
   type Lead, type InsertLead,
@@ -18,6 +18,8 @@ import {
   type Payment, type InsertPayment,
   type Notification, type InsertNotification,
   type SMSLog, type InsertSMSLog,
+  type SMSConversation, type InsertSMSConversation,
+  type MessageRange, type InsertMessageRange,
   type ActivityLog, type InsertActivityLog,
   type Document, type InsertDocument,
 } from "@shared/schema";
@@ -150,6 +152,26 @@ export interface IStorage {
   getSMSLogsByEntity(entityType: string, entityId: string): Promise<SMSLog[]>;
   createSMSLog(log: InsertSMSLog): Promise<SMSLog>;
   updateSMSLog(id: string, log: Partial<InsertSMSLog>): Promise<SMSLog | undefined>;
+  markMessagesRead(messageIds: string[]): Promise<void>;
+  getUnreadMessageCount(): Promise<number>;
+  
+  // SMS Conversations
+  getSMSConversation(id: string): Promise<SMSConversation | undefined>;
+  getSMSConversationByPhone(phone: string): Promise<SMSConversation | undefined>;
+  getSMSConversations(): Promise<SMSConversation[]>;
+  getUnresolvedConversations(): Promise<SMSConversation[]>;
+  createSMSConversation(conversation: InsertSMSConversation): Promise<SMSConversation>;
+  updateSMSConversation(id: string, conversation: Partial<InsertSMSConversation>): Promise<SMSConversation | undefined>;
+  getOrCreateConversation(phone: string): Promise<SMSConversation>;
+  findClientByPhone(phone: string): Promise<Client | undefined>;
+  
+  // Message Ranges
+  getMessageRange(id: string): Promise<MessageRange | undefined>;
+  getMessageRangesByConversation(conversationId: string): Promise<MessageRange[]>;
+  getMessageRangesByLead(leadId: string): Promise<MessageRange[]>;
+  getMessageRangesByJob(jobId: string): Promise<MessageRange[]>;
+  createMessageRange(range: InsertMessageRange): Promise<MessageRange>;
+  deleteMessageRange(id: string): Promise<boolean>;
 
   // Activity Logs
   getActivityLogs(): Promise<ActivityLog[]>;
@@ -731,6 +753,115 @@ export class DatabaseStorage implements IStorage {
   async updateSMSLog(id: string, log: Partial<InsertSMSLog>): Promise<SMSLog | undefined> {
     const [updated] = await db.update(smsLogs).set(log).where(eq(smsLogs.id, id)).returning();
     return updated;
+  }
+
+  async markMessagesRead(messageIds: string[]): Promise<void> {
+    if (messageIds.length === 0) return;
+    for (const id of messageIds) {
+      await db.update(smsLogs).set({ isRead: true }).where(eq(smsLogs.id, id));
+    }
+  }
+
+  async getUnreadMessageCount(): Promise<number> {
+    const [result] = await db.select({ count: sql<number>`count(*)` })
+      .from(smsLogs)
+      .where(and(eq(smsLogs.isRead, false), eq(smsLogs.isOutbound, false)));
+    return Number(result?.count || 0);
+  }
+
+  // SMS Conversations
+  async getSMSConversation(id: string): Promise<SMSConversation | undefined> {
+    const [conversation] = await db.select().from(smsConversations).where(eq(smsConversations.id, id));
+    return conversation;
+  }
+
+  async getSMSConversationByPhone(phone: string): Promise<SMSConversation | undefined> {
+    const normalizedPhone = phone.replace(/\D/g, '').slice(-9);
+    const allConversations = await db.select().from(smsConversations);
+    return allConversations.find(conv => {
+      const convPhone = conv.phoneNumber.replace(/\D/g, '').slice(-9);
+      return convPhone === normalizedPhone;
+    });
+  }
+
+  async getSMSConversations(): Promise<SMSConversation[]> {
+    return db.select().from(smsConversations).orderBy(desc(smsConversations.lastMessageAt));
+  }
+
+  async getUnresolvedConversations(): Promise<SMSConversation[]> {
+    return db.select().from(smsConversations)
+      .where(eq(smsConversations.isResolved, false))
+      .orderBy(desc(smsConversations.lastMessageAt));
+  }
+
+  async createSMSConversation(conversation: InsertSMSConversation): Promise<SMSConversation> {
+    const [created] = await db.insert(smsConversations).values(conversation).returning();
+    return created;
+  }
+
+  async updateSMSConversation(id: string, conversation: Partial<InsertSMSConversation>): Promise<SMSConversation | undefined> {
+    const [updated] = await db.update(smsConversations).set(conversation).where(eq(smsConversations.id, id)).returning();
+    return updated;
+  }
+
+  async findClientByPhone(phone: string): Promise<Client | undefined> {
+    const normalizedPhone = phone.replace(/\D/g, '').slice(-9);
+    const allClients = await db.select().from(clients);
+    return allClients.find(client => {
+      if (!client.phone) return false;
+      const clientPhone = client.phone.replace(/\D/g, '').slice(-9);
+      return clientPhone === normalizedPhone;
+    });
+  }
+
+  async getOrCreateConversation(phone: string): Promise<SMSConversation> {
+    let conversation = await this.getSMSConversationByPhone(phone);
+    if (conversation) return conversation;
+    
+    // Try to find matching client
+    const client = await this.findClientByPhone(phone);
+    
+    // Create new conversation
+    return this.createSMSConversation({
+      phoneNumber: phone,
+      clientId: client?.id || null,
+      lastMessageAt: new Date(),
+      unreadCount: 0,
+    });
+  }
+
+  // Message Ranges
+  async getMessageRange(id: string): Promise<MessageRange | undefined> {
+    const [range] = await db.select().from(messageRanges).where(eq(messageRanges.id, id));
+    return range;
+  }
+
+  async getMessageRangesByConversation(conversationId: string): Promise<MessageRange[]> {
+    return db.select().from(messageRanges)
+      .where(eq(messageRanges.conversationId, conversationId))
+      .orderBy(desc(messageRanges.createdAt));
+  }
+
+  async getMessageRangesByLead(leadId: string): Promise<MessageRange[]> {
+    return db.select().from(messageRanges)
+      .where(eq(messageRanges.leadId, leadId))
+      .orderBy(desc(messageRanges.createdAt));
+  }
+
+  async getMessageRangesByJob(jobId: string): Promise<MessageRange[]> {
+    return db.select().from(messageRanges)
+      .where(eq(messageRanges.jobId, jobId))
+      .orderBy(desc(messageRanges.createdAt));
+  }
+
+  async createMessageRange(range: InsertMessageRange): Promise<MessageRange> {
+    const [created] = await db.insert(messageRanges).values(range).returning();
+    return created;
+  }
+
+  async deleteMessageRange(id: string): Promise<boolean> {
+    await db.delete(messageRanges).where(eq(messageRanges.id, id));
+    return true;
   }
 
   // Activity Logs

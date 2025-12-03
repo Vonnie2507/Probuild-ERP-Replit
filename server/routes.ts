@@ -6,7 +6,8 @@ import {
   insertQuoteSchema, insertJobSchema, insertBOMSchema,
   insertProductionTaskSchema, insertInstallTaskSchema,
   insertScheduleEventSchema, insertPaymentSchema,
-  insertFenceStyleSchema, insertNotificationSchema
+  insertFenceStyleSchema, insertNotificationSchema,
+  insertSMSConversationSchema, insertMessageRangeSchema
 } from "@shared/schema";
 import { z } from "zod";
 import Stripe from "stripe";
@@ -1351,20 +1352,13 @@ export async function registerRoutes(
 
       // Find client by phone number to get their name
       let recipientName = "Unknown";
-      const clients = await storage.getClients();
-      const matchingClient = clients.find((c) => {
-        if (!c.phone) return false;
-        // Normalize phone numbers for comparison
-        const normalizedClientPhone = c.phone.replace(/\D/g, "").slice(-9);
-        const normalizedFrom = From.replace(/\D/g, "").slice(-9);
-        return normalizedClientPhone === normalizedFrom;
-      });
+      const matchingClient = await storage.findClientByPhone(From);
 
       if (matchingClient) {
         recipientName = matchingClient.name;
       }
 
-      // Store the incoming message
+      // Store the incoming message (unread by default)
       const smsLog = await storage.createSMSLog({
         recipientPhone: From,
         recipientName,
@@ -1372,9 +1366,32 @@ export async function registerRoutes(
         twilioMessageSid: MessageSid || null,
         status: "received",
         isOutbound: false,
+        isRead: false,
         sentAt: new Date(),
         relatedEntityType: matchingClient ? "client" : null,
         relatedEntityId: matchingClient?.id || null,
+      });
+
+      // Get or create conversation and update it
+      const conversation = await storage.getOrCreateConversation(From);
+      
+      // If conversation was resolved, unresolve it (customer replied = action required)
+      // Also increment unread count
+      await storage.updateSMSConversation(conversation.id, {
+        isResolved: false,
+        resolvedAt: null,
+        resolvedBy: null,
+        lastMessageAt: new Date(),
+        unreadCount: (conversation.unreadCount || 0) + 1,
+      });
+
+      // Create notification for new incoming message
+      await storage.createNotification({
+        type: "new_message",
+        title: "New SMS Message",
+        message: `${recipientName}: ${Body.substring(0, 100)}${Body.length > 100 ? '...' : ''}`,
+        relatedEntityType: "sms_conversation",
+        relatedEntityId: conversation.id,
       });
 
       console.log("Incoming SMS saved:", smsLog.id, "from:", From);
@@ -1385,6 +1402,194 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error processing incoming SMS:", error);
       res.status(500).send("Error processing message");
+    }
+  });
+
+  // ============ SMS CONVERSATIONS ============
+  
+  // Get all conversations
+  app.get("/api/sms/conversations", async (req, res) => {
+    try {
+      const conversations = await storage.getSMSConversations();
+      res.json(conversations);
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
+  // Get unread message count
+  app.get("/api/sms/unread-count", async (req, res) => {
+    try {
+      const count = await storage.getUnreadMessageCount();
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ error: "Failed to fetch unread count" });
+    }
+  });
+
+  // Get conversation by ID
+  app.get("/api/sms/conversations/:id", async (req, res) => {
+    try {
+      const conversation = await storage.getSMSConversation(req.params.id);
+      if (!conversation) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      res.json(conversation);
+    } catch (error) {
+      console.error("Error fetching conversation:", error);
+      res.status(500).json({ error: "Failed to fetch conversation" });
+    }
+  });
+
+  // Update conversation (assign, resolve, link to client)
+  app.patch("/api/sms/conversations/:id", async (req, res) => {
+    try {
+      const updateSchema = z.object({
+        assignedTo: z.string().nullable().optional(),
+        isResolved: z.boolean().optional(),
+        resolvedBy: z.string().nullable().optional(),
+        clientId: z.string().nullable().optional(),
+        notes: z.string().nullable().optional(),
+      });
+      
+      const validatedData = updateSchema.parse(req.body);
+      const { assignedTo, isResolved, resolvedBy, clientId, notes } = validatedData;
+      const updates: any = {};
+      
+      if (assignedTo !== undefined) updates.assignedTo = assignedTo;
+      if (clientId !== undefined) updates.clientId = clientId;
+      if (notes !== undefined) updates.notes = notes;
+      
+      if (isResolved !== undefined) {
+        updates.isResolved = isResolved;
+        if (isResolved) {
+          updates.resolvedAt = new Date();
+          updates.resolvedBy = resolvedBy || null;
+        } else {
+          updates.resolvedAt = null;
+          updates.resolvedBy = null;
+        }
+      }
+      
+      const conversation = await storage.updateSMSConversation(req.params.id, updates);
+      if (!conversation) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      res.json(conversation);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating conversation:", error);
+      res.status(500).json({ error: "Failed to update conversation" });
+    }
+  });
+
+  // Mark messages as read
+  app.post("/api/sms/mark-read", async (req, res) => {
+    try {
+      const { messageIds, conversationId } = req.body;
+      
+      if (messageIds && messageIds.length > 0) {
+        await storage.markMessagesRead(messageIds);
+      }
+      
+      // Reset unread count on conversation
+      if (conversationId) {
+        await storage.updateSMSConversation(conversationId, { unreadCount: 0 });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking messages as read:", error);
+      res.status(500).json({ error: "Failed to mark messages as read" });
+    }
+  });
+
+  // ============ MESSAGE RANGES ============
+  
+  // Create a message range (bundle of messages attached to an opportunity)
+  app.post("/api/sms/message-ranges", async (req, res) => {
+    try {
+      const messageRangeInputSchema = insertMessageRangeSchema
+        .omit({ messageCount: true })
+        .extend({
+          startDate: z.string(),
+          endDate: z.string(),
+        });
+      
+      const validatedData = messageRangeInputSchema.parse(req.body);
+      const { conversationId, leadId, jobId, quoteId, startMessageId, endMessageId, startDate, endDate, summary } = validatedData;
+      
+      // Count messages in range
+      const conversation = await storage.getSMSConversation(conversationId);
+      if (!conversation) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      
+      const messages = await storage.getSMSLogsByPhone(conversation.phoneNumber);
+      const startTime = new Date(startDate).getTime();
+      const endTime = new Date(endDate).getTime();
+      const messagesInRange = messages.filter(m => {
+        const msgTime = new Date(m.createdAt).getTime();
+        return msgTime >= startTime && msgTime <= endTime;
+      });
+      
+      const range = await storage.createMessageRange({
+        conversationId,
+        leadId: leadId || null,
+        jobId: jobId || null,
+        quoteId: quoteId || null,
+        startMessageId,
+        endMessageId,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        messageCount: messagesInRange.length,
+        summary: summary || null,
+      });
+      
+      res.status(201).json(range);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating message range:", error);
+      res.status(500).json({ error: "Failed to create message range" });
+    }
+  });
+
+  // Get message ranges by lead
+  app.get("/api/sms/message-ranges/lead/:leadId", async (req, res) => {
+    try {
+      const ranges = await storage.getMessageRangesByLead(req.params.leadId);
+      res.json(ranges);
+    } catch (error) {
+      console.error("Error fetching message ranges:", error);
+      res.status(500).json({ error: "Failed to fetch message ranges" });
+    }
+  });
+
+  // Get message ranges by job
+  app.get("/api/sms/message-ranges/job/:jobId", async (req, res) => {
+    try {
+      const ranges = await storage.getMessageRangesByJob(req.params.jobId);
+      res.json(ranges);
+    } catch (error) {
+      console.error("Error fetching message ranges:", error);
+      res.status(500).json({ error: "Failed to fetch message ranges" });
+    }
+  });
+
+  // Delete message range
+  app.delete("/api/sms/message-ranges/:id", async (req, res) => {
+    try {
+      await storage.deleteMessageRange(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting message range:", error);
+      res.status(500).json({ error: "Failed to delete message range" });
     }
   });
 

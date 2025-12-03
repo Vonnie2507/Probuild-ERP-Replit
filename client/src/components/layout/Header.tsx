@@ -80,6 +80,9 @@ export function Header({ title }: HeaderProps) {
         return "/clients";
       case "schedule":
         return "/schedule";
+      case "sms_conversation":
+      case "new_message":
+        return "/messages";
       default:
         return null;
     }

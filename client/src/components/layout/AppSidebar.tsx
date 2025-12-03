@@ -1,4 +1,5 @@
 import { useLocation, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Users,
@@ -27,6 +28,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
 const mainNavItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -56,6 +58,14 @@ const tradeItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+
+  // Poll for unread message count every 30 seconds
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ['/api/sms/unread-count'],
+    refetchInterval: 30000,
+  });
+
+  const unreadCount = unreadData?.count || 0;
 
   const isActive = (url: string) => {
     if (url === "/") return location === "/";
@@ -123,6 +133,15 @@ export function AppSidebar() {
                     <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
+                      {item.title === "Messages" && unreadCount > 0 && (
+                        <Badge 
+                          variant="destructive" 
+                          className="ml-auto h-5 min-w-5 px-1.5 text-xs"
+                          data-testid="badge-unread-messages"
+                        >
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </Badge>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

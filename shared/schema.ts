@@ -398,11 +398,44 @@ export const smsLogs = pgTable("sms_logs", {
   twilioMessageSid: text("twilio_message_sid"),
   status: text("status").notNull().default("pending"),
   isOutbound: boolean("is_outbound").notNull().default(true),
+  isRead: boolean("is_read").notNull().default(false),
   relatedEntityType: text("related_entity_type"),
   relatedEntityId: varchar("related_entity_id"),
   sentAt: timestamp("sent_at"),
   deliveredAt: timestamp("delivered_at"),
   errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// SMS Conversations table - tracks conversation metadata per phone number
+export const smsConversations = pgTable("sms_conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  phoneNumber: text("phone_number").notNull().unique(),
+  clientId: varchar("client_id").references(() => clients.id),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  isResolved: boolean("is_resolved").notNull().default(false),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: varchar("resolved_by").references(() => users.id),
+  lastMessageAt: timestamp("last_message_at").notNull().defaultNow(),
+  unreadCount: integer("unread_count").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Message Ranges - bundles of messages attached to opportunities
+export const messageRanges = pgTable("message_ranges", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").references(() => smsConversations.id).notNull(),
+  leadId: varchar("lead_id").references(() => leads.id),
+  jobId: varchar("job_id").references(() => jobs.id),
+  quoteId: varchar("quote_id").references(() => quotes.id),
+  startMessageId: varchar("start_message_id").references(() => smsLogs.id).notNull(),
+  endMessageId: varchar("end_message_id").references(() => smsLogs.id).notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  messageCount: integer("message_count").notNull(),
+  summary: text("summary"),
+  attachedBy: varchar("attached_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -506,6 +539,16 @@ export const insertSMSLogSchema = createInsertSchema(smsLogs).omit({
   createdAt: true,
 });
 
+export const insertSMSConversationSchema = createInsertSchema(smsConversations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMessageRangeSchema = createInsertSchema(messageRanges).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertActivityLogSchema = createInsertSchema(activityLogs).omit({
   id: true,
   createdAt: true,
@@ -558,6 +601,12 @@ export type Notification = typeof notifications.$inferSelect;
 
 export type InsertSMSLog = z.infer<typeof insertSMSLogSchema>;
 export type SMSLog = typeof smsLogs.$inferSelect;
+
+export type InsertSMSConversation = z.infer<typeof insertSMSConversationSchema>;
+export type SMSConversation = typeof smsConversations.$inferSelect;
+
+export type InsertMessageRange = z.infer<typeof insertMessageRangeSchema>;
+export type MessageRange = typeof messageRanges.$inferSelect;
 
 export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 export type ActivityLog = typeof activityLogs.$inferSelect;

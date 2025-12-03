@@ -7,6 +7,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Header } from "@/components/layout/Header";
+import { NewMessageBanner } from "@/components/layout/NewMessageBanner";
 
 import Dashboard from "@/pages/Dashboard";
 import Leads from "@/pages/Leads";
@@ -32,6 +33,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <SidebarInset className="flex flex-col flex-1 overflow-hidden">
+          <NewMessageBanner />
           <Header />
           <main className="flex-1 overflow-auto bg-background">
             {children}
