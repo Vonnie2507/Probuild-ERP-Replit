@@ -704,10 +704,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSMSLogsByPhone(phone: string): Promise<SMSLog[]> {
-    const normalizedPhone = phone.replace(/\D/g, '');
-    return db.select().from(smsLogs)
-      .where(sql`regexp_replace(${smsLogs.recipientPhone}, '[^0-9]', '', 'g') LIKE '%' || ${normalizedPhone} || '%'`)
-      .orderBy(smsLogs.createdAt);
+    // Get last 9 digits for matching (handles both 0xxx and +61xxx formats)
+    const normalizedPhone = phone.replace(/\D/g, '').slice(-9);
+    const allLogs = await db.select().from(smsLogs).orderBy(smsLogs.createdAt);
+    // Filter in JS to handle phone number matching correctly
+    return allLogs.filter(log => {
+      const logPhone = log.recipientPhone.replace(/\D/g, '').slice(-9);
+      return logPhone === normalizedPhone;
+    });
   }
 
   async getSMSLogsByEntity(entityType: string, entityId: string): Promise<SMSLog[]> {

@@ -105,9 +105,10 @@ export default function Messages() {
   );
 
   const getClientMessages = (clientPhone: string): SMSLog[] => {
-    const normalizedPhone = clientPhone.replace(/\D/g, '');
+    // Use last 9 digits for matching (handles both 0xxx and +61xxx formats)
+    const normalizedPhone = clientPhone.replace(/\D/g, '').slice(-9);
     return allMessages.filter(msg => 
-      msg.recipientPhone.replace(/\D/g, '').includes(normalizedPhone)
+      msg.recipientPhone.replace(/\D/g, '').slice(-9) === normalizedPhone
     );
   };
 
