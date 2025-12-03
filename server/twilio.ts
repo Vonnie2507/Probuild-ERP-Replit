@@ -14,6 +14,19 @@ export function clearTwilioCache() {
 }
 
 async function getCredentials() {
+  // PRIORITY 1: Check for Auth Token in environment variables (works with global US1 endpoint for SMS)
+  // This is needed because AU regional API Keys don't support SMS
+  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+    console.log('Twilio using env var Auth Token credentials (global endpoint for SMS)');
+    return {
+      accountSid: process.env.TWILIO_ACCOUNT_SID,
+      authToken: process.env.TWILIO_AUTH_TOKEN,
+      phoneNumber: process.env.TWILIO_PHONE_NUMBER || null,
+      useAuthToken: true
+    };
+  }
+
+  // PRIORITY 2: Try the Replit connector (may not work for SMS if regional)
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
@@ -81,23 +94,13 @@ async function getCredentials() {
         };
       }
       
-      console.log('Twilio connector settings incomplete');
+      console.log('Twilio connector settings incomplete - for SMS, add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER as secrets');
     } catch (error) {
       console.log('Twilio connector error:', error);
     }
   }
 
-  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-    console.log('Twilio using env var credentials');
-    return {
-      accountSid: process.env.TWILIO_ACCOUNT_SID,
-      authToken: process.env.TWILIO_AUTH_TOKEN,
-      phoneNumber: process.env.TWILIO_PHONE_NUMBER || null,
-      useAuthToken: true
-    };
-  }
-
-  console.log('No Twilio credentials found');
+  console.log('No Twilio credentials found - add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER as secrets');
   return null;
 }
 
@@ -113,12 +116,9 @@ export async function getTwilioClient(): Promise<Twilio | null> {
   }
 
   if ('useAuthToken' in credentials && credentials.useAuthToken) {
-    // Use Australian regional endpoint for AU accounts
-    twilioClientInstance = twilio(credentials.accountSid, credentials.authToken, {
-      region: 'au1',
-      edge: 'sydney'
-    });
-    console.log('Twilio client initialized with Auth Token (AU region au1/sydney)');
+    // Use global endpoint (US1) for Auth Token - SMS only works on global endpoint
+    twilioClientInstance = twilio(credentials.accountSid, credentials.authToken);
+    console.log('Twilio client initialized with Auth Token (global endpoint for SMS)');
   } else if ('useApiKey' in credentials && credentials.useApiKey) {
     // Use API Key authentication - use global endpoint (AU region doesn't support SMS)
     twilioClientInstance = twilio(credentials.apiKey, credentials.apiKeySecret, {
