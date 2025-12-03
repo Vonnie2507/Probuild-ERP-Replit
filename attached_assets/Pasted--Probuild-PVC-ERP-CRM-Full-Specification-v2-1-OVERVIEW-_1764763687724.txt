@@ -1,0 +1,1729 @@
+# Probuild PVC ERP & CRM — Full Specification (v2)
+
+## 1. OVERVIEW
+
+**Industry Context:** General SaaS/ERP
+
+**Target Users:**
+- Admin / Owners (Vonnie & Bradley)
+- Sales Team (Dave + Future Sales Members)
+- Scheduler (Craig)
+- Production Manager (David Turner)
+- Production Team / Warehouse (George + future team)
+- Installers (Jake + Jarrad + contractors)
+- Trade Clients (External Portal)
+
+**System Purpose:**
+A complete end-to-end ERP, CRM, and production management system for PVC fencing manufacturers — handling leads, quoting, sales, scheduling, manufacturing, inventory, QA, delivery, and customer communication in one place.
+
+**High-Level Summary:**
+Probuild PVC Fencing is a Western Australian PVC fencing manufacturer, supplier, and installer. We manufacture all PVC fence styles in-house at our Malaga warehouse, selling to both the general public and trade accounts. Our workflow spans lead intake, quoting, deposits, production scheduling, manufacturing, quality control, delivery/pickup, installation, and after-sales support.
+
+We serve three key groups:
+1. General Public (Homeowners): wanting supply-only or supply + install.
+2. Trade Clients (Contractors): purchasing product regularly for installation jobs.
+3. Internal Operations Team: warehouse, production, sales, admin, and installers.
+
+The business has multiple moving parts:
+• High-volume quoting
+• Complex BOMs per job
+• Inventory and cutting requirements
+• Team-based manufacturing workflows
+• Multiple job stages requiring strict communication
+• Field installation scheduling
+• Customer service and callbacks
+• Warranty and long-term product support
+
+The new platform must centralise all data, streamline admin, reduce errors, automate communication, and improve productivity across sales, manufacturing, and operations.
+
+**Out of Scope:**
+E-commerce website or public-facing store
+• Advanced HR, timesheets, or rostering
+• CAD drawing generation
+• Delivery route optimisation
+• Full-blown marketing platform (email campaigns, ads manager, etc.)
+
+---
+
+## 2. CORE MODULES
+
+### Dashboard
+
+**Purpose:** A high-level overview of jobs, sales activity, production workload, and upcoming installs.
+
+**Responsibilities:**
+Today’s Priorities
+• New Leads
+• Quotes Awaiting Follow-Up
+• Jobs In Production
+• Jobs Ready for Install
+• Installer Schedule Snapshot
+• Notifications / Alerts
+
+**Key Features / Actions:**
+Open lead
+• Open quote
+• Update job stage
+• Assign tasks
+• View schedule
+• Approve variations
+
+**Inputs & Outputs:** Inferred from entity relationships and workflow interactions
+
+**Dependencies:** Admin, Sales, Scheduler, Production Manager
+
+**Linked Entities:** Lead, Quote, Job, Product
+
+**Linked Workflows:** None identified
+
+**Linked Automations:** See Section 6 for automations affecting this module
+
+**Guardrails / Special Rules:**
+Each role sees only their relevant widgets.
+
+---
+
+### Leads & Quotes
+
+**Purpose:** Central hub for managing enquiries, building quotes, sending quotes, and tracking conversions.
+
+**Responsibilities:**
+Lead list (kanban stages)
+• Quote builder
+• Quote templates
+• Client details panel
+• Follow-up reminders
+• Quote status timeline
+
+**Key Features / Actions:**
+Create new lead
+• Convert lead to quote
+• Build/send quote
+• Add notes
+• Log follow-up
+• Mark quote as accepted/declined
+
+**Inputs & Outputs:** Inferred from entity relationships and workflow interactions
+
+**Dependencies:** Sales, Admin, Owners
+
+**Linked Entities:** Client, Lead, Quote
+
+**Linked Workflows:** None identified
+
+**Linked Automations:** See Section 6 for automations affecting this module
+
+**Guardrails / Special Rules:**
+Trade pricing rules apply automatically for trade accounts.
+**New Rule:** Leads now have a `lead_type` field differentiating between Public and Trade leads.
+
+---
+
+### Job Manager
+
+**Purpose:** Main job tracking system from deposit → production → scheduling → install → completion.
+
+**Responsibilities:**
+• Job overview
+• Job timeline
+• Site address & client info
+• Materials (BOM)
+• Scheduling panel
+• Production status summary
+• Installer notes & photos
+• Documents
+
+**Key Features / Actions:**
+Update job status
+• Upload documents
+• View materials
+• Add install notes
+• Approve or request variations
+• Close job
+
+**Inputs & Outputs:** Inferred from entity relationships and workflow interactions
+
+**Dependencies:** Admin, Sales, Scheduler, Production Manager, Warehouse, Installers (limited)
+
+**Linked Entities:** Client, Job, Product, BOM
+
+**Linked Workflows:** None identified
+
+**Linked Automations:** See Section 6 for automations affecting this module
+
+**Guardrails / Special Rules:**
+Production team cannot edit job financial data.
+
+---
+
+### Production Manager
+
+**Purpose:** Tracks manufacturing tasks, time spent, stock usage, and QA.
+
+**Responsibilities:**
+Daily task queue
+• Production tasks per job
+• Cutting list
+• Routing list
+• Assembly list
+• QA checks
+• Time tracking dashboard
+• Stock usage
+
+**Key Features / Actions:**
+Start/stop manufacturing task
+• Mark step complete
+• Update QA results
+• Allocate staff
+• Record materials used
+• Flag shortages
+
+**Inputs & Outputs:** Inferred from entity relationships and workflow interactions
+
+**Dependencies:** Production Manager, Warehouse, Admin
+
+**Linked Entities:** Job, Product, Production Task
+
+**Linked Workflows:** Manufacturing & Production Flow
+
+**Linked Automations:** See Section 6 for automations affecting this module
+
+**Guardrails / Special Rules:**
+No access to pricing or quotes.
+• Tasks can only be completed in correct sequence (Cut → Route → Assemble → QA).
+
+---
+
+### Scheduling Calendar
+
+**Purpose:** Centralised booking and scheduling for production, site measures, pickups, deliveries, and installs.
+
+**Responsibilities:**
+• Calendar view (day/week/month)
+• Installers list
+• Job readiness panel
+• Capacity overview
+• Pending jobs
+• Scheduling actions
+
+**Key Features / Actions:**
+Assign install dates
+• Assign delivery/pickup
+• Reschedule
+• Notify client
+• Notify installer
+• Mark confirmed
+
+**Inputs & Outputs:** Inferred from entity relationships and workflow interactions
+
+**Dependencies:** Scheduler (Craig), Admin, Sales (view only), Installers (view only)
+
+**Linked Entities:** Client, Job
+
+**Linked Workflows:** None identified
+
+**Linked Automations:** See Section 6 for automations affecting this module
+
+**Guardrails / Special Rules:**
+Craig has full control.
+• Installers can view their jobs but cannot change any dates.
+• Sales receives updates automatically for customer comms.
+
+**New Features:**
+1. Multiple calendar views: Day, Week, Month toggle.
+2. Filters for install events by type (Posts, Panels, Gates).
+3. Production tasks visible as separate events.
+4. PO events from suppliers shown and filterable on the calendar.
+5. Icons for client pickups, freight arrivals, and deliveries enhanced for clarity.
+6. Legend and filter panel for scheduling visibility added.
+
+---
+
+### Installer App
+
+**Purpose:** Lightweight mobile-friendly screen for installers to do onsite work.
+
+**Responsibilities:**
+Today’s Jobs
+• Job Details
+• Address + Map
+• Materials
+• Photos (before/after)
+• Variations
+• Completion steps
+
+**Key Features / Actions:**
+Check-in
+• Upload photos
+• Add notes
+• Record variations
+• Mark job complete
+
+**Inputs & Outputs:** Inferred from entity relationships and workflow interactions
+
+**Dependencies:** Installers
+
+**Linked Entities:** Job
+
+**Linked Workflows:** None identified
+
+**Linked Automations:** See Section 6 for automations affecting this module
+
+**Guardrails / Special Rules:**
+Installers cannot change job dates.
+
+---
+
+### Clients
+
+**Purpose:** Central client database storing history, contact info, jobs, quotes.
+
+**Responsibilities:**
+Client profile
+• Contact info
+• Job history
+• Quotes history
+• Documents
+• Notes
+
+**Key Features / Actions:**
+Edit client
+• Add notes
+• Create new quote
+• View documents
+• Upload files
+
+**Inputs & Outputs:** Inferred from entity relationships and workflow interactions
+
+**Dependencies:** Admin, Sales
+
+**Linked Entities:** Client, Quote, Job
+
+**Linked Workflows:** None identified
+
+**Linked Automations:** See Section 6 for automations affecting this module
+
+**Guardrails / Special Rules:**
+Trade clients flagged with trade level & discounts.
+
+---
+
+### Trade Portal
+
+**Purpose:** Allows trade customers to view quotes, accept jobs, pay deposits, and track orders.
+
+**Responsibilities:**
+• My Quotes
+• My Orders
+• Track Job
+• Installation Guides
+• Reorder materials
+
+**Key Features / Actions:**
+Accept quote
+• Pay deposit
+• Download installation PDFs
+• Request support
+
+**Inputs & Outputs:** Inferred from entity relationships and workflow interactions
+
+**Dependencies:** Trade Clients (external)
+
+**Linked Entities:** Quote, Job
+
+**Linked Workflows:** Lead to Quote Conversion
+
+**Linked Automations:** See Section 6 for automations affecting this module
+
+**Guardrails / Special Rules:**
+Trade customers cannot see internal notes or margins.
+
+---
+
+### Products & Inventory
+
+**Purpose:** Manages SKUs, stock levels, cost, and BOM linking.
+
+**Responsibilities:**
+Product list
+• Stock on hand
+• Low stock alerts
+• BOM mapping
+• Cut lists
+• Inventory adjustments
+
+**Key Features / Actions:**
+Add product
+• Edit stock levels
+• Record stock usage
+• Generate low-stock alerts
+
+**Inputs & Outputs:** Inferred from entity relationships and workflow interactions
+
+**Dependencies:** Admin, Production Manager, Warehouse
+
+**Linked Entities:** Product, BOM
+
+**Linked Workflows:** None identified
+
+**Linked Automations:** See Section 6 for automations affecting this module
+
+**Guardrails / Special Rules:**
+Only Admin can change cost price.
+
+---
+
+### Finance & Payments
+
+**Purpose:** Handles deposits, finals, credit notes, and syncs to Xero.
+
+**Responsibilities:**
+All payments
+• Pending payments
+• Invoice history
+• Xero sync status
+• Refunds/credits
+
+**Key Features / Actions:**
+Record payment
+• Mark invoice sent
+• Sync to Xero
+• Raise refund/credit
+
+**Inputs & Outputs:** Inferred from entity relationships and workflow interactions
+
+**Dependencies:** Admin, Sales
+
+**Linked Entities:** Payment
+
+**Linked Workflows:** None identified
+
+**Linked Automations:** See Section 6 for automations affecting this module
+
+**Guardrails / Special Rules:**
+Standard rules apply
+
+---
+
+## 3. ENTITIES & DATA MODEL
+
+### Client
+
+**Description:** Represents a customer of Probuild — either a homeowner (general public) or a trade account purchasing regularly.
+
+**Fields:**
+name
+• phone
+• email
+• address
+• client_type (general public / trade)
+• trade_discount_level
+• notes
+• created_date
+
+**Relationships:**
+has many Leads
+• has many Quotes
+• has many Jobs
+• has many Payments
+• has many Documents
+
+**Required vs Optional:** Infer from field definitions above
+
+**Business Rules:** Enforce data integrity based on relationships
+
+**Integrity Constraints:** Ensure referential integrity with related entities
+
+---
+
+### Lead
+
+**Description:** An initial enquiry from a customer before it becomes a quote.
+
+**Fields:**
+source
+• description
+• measurements_provided
+• site_address
+• stage (new, contacted, needs quote, etc.)
+• assigned_to (salesperson)
+• created_date
+• lead_type (Public / Trade)
+
+**Relationships:**
+belongs to Client
+• may lead to one Quote
+
+**Required vs Optional:** Infer from field definitions above
+
+**Business Rules:** Enforce data integrity based on relationships, Public leads must follow full pipeline.
+
+**Integrity Constraints:** Ensure referential integrity with related entities
+
+---
+
+### Quote
+
+**Description:** A formal price estimate prepared for a client. May be supply-only or supply + install.
+
+**Fields:**
+quote_number
+• fence_style
+• line_items
+• materials_required
+• labour_estimate
+• total_amount
+• deposit_required
+• status (draft, sent, approved, declined)
+• created_date
+
+**Relationships:**
+belongs to Client
+• has one Job (after deposit paid)
+• uses many Products via BOM
+
+**Required vs Optional:** Infer from field definitions above
+
+**Business Rules:** Enforce data integrity based on relationships
+
+**Integrity Constraints:** Ensure referential integrity with related entities
+
+---
+
+### Job
+
+**Description:** A confirmed project created once a quote is accepted and deposit is paid. Tracks production, scheduling, and installation.
+
+**Fields:**
+job_number
+• job_type (supply only / supply + install)
+• site_address
+• measurements
+• status (various workflow stages including: Accepted, Manufacturing Posts, Install Posts, etc.)
+• assigned_installer
+• scheduled_dates
+• completion_date
+
+**Relationships:**
+belongs to Client
+• belongs to Quote
+• has many Production Tasks
+• has many Install Tasks
+• has one BOM
+• has many Documents
+
+**Required vs Optional:** Infer from field definitions above
+
+**Business Rules:** Enforce data integrity based on relationships
+
+**Integrity Constraints:** Ensure referential integrity with related entities
+
+---
+
+### Product
+
+**Description:** A PVC component or item used for manufacturing (posts, rails, pickets, caps, screws, gates, etc.).
+
+**Fields:**
+SKU
+• name
+• category
+• dimensions
+• colour
+• cost_price
+• sell_price
+• stock_on_hand
+• reorder_point
+
+**Relationships:**
+used in many BOMs
+• used in many Production Tasks
+
+**Required vs Optional:** Infer from field definitions above
+
+**Business Rules:** Enforce data integrity based on relationships
+
+**Integrity Constraints:** Ensure referential integrity with related entities
+
+---
+
+### Fence Style
+
+**Description:** Template configurations for Probuild’s main fencing styles (Hampton, Picket, Colonial, Nautilus, etc.).
+
+**Fields:**
+style_name
+• standard_heights
+• standard_post_types
+• picket_spacing_options
+• default_BOM_structure
+
+**Relationships:**
+used by many Quotes
+• used by many Jobs
+• is referenced by BOM
+
+**Required vs Optional:** Infer from field definitions above
+
+**Business Rules:** Enforce data integrity based on relationships
+
+**Integrity Constraints:** Ensure referential integrity with related entities
+
+---
+
+### BOM
+
+**Description:** Material breakdown required to manufacture a specific job.
+
+**Fields:**
+job_number
+• component_list
+• cut_lengths
+• quantities
+• wastage_percent
+• machine_time
+• labour_time
+
+**Relationships:**
+belongs to Job
+• uses many Products
+
+**Required vs Optional:** Infer from field definitions above
+
+**Business Rules:** Enforce data integrity based on relationships
+
+**Integrity Constraints:** Ensure referential integrity with related entities
+
+---
+
+### Production Task
+
+**Description:** A specific manufacturing action (cutting, routing, assembly, QA) assigned to a production worker.
+
+**Fields:**
+task_type
+• start_time
+• end_time
+• time_spent
+• assigned_to
+• status
+• machine_used
+
+**Relationships:**
+belongs to Job
+• uses many Products
+• belongs to Production Batch (optional)
+
+**Required vs Optional:** Infer from field definitions above
+
+**Business Rules:** Enforce data integrity based on relationships
+
+**Integrity Constraints:** Ensure referential integrity with related entities
+
+---
+
+### Install Task
+
+**Description:** Installation actions performed onsite by installers.
+
+**Fields:**
+scheduled_date
+• installer_name
+• notes
+• variations_found
+• photos
+• status (scheduled, on-site, complete)
+
+**Relationships:**
+belongs to Job
+
+**Required vs Optional:** Infer from field definitions above
+
+**Business Rules:** Enforce data integrity based on relationships
+
+**Integrity Constraints:** Ensure referential integrity with related entities
+
+---
+
+### Payment
+
+**Description:** Tracks all financial transactions related to deposits, finals, refunds, or adjustments.
+
+**Fields:**
+• invoice_number
+• amount
+• payment_type
+• payment_date
+• deposit_or_final
+• xero_sync_status
+
+**Relationships:**
+belongs to Client
+• belongs to Job
+• belongs to Quote
+
+**Required vs Optional:** Infer from field definitions above
+
+**Business Rules:** Enforce data integrity based on relationships
+
+**Integrity Constraints:** Ensure referential integrity with related entities
+
+---
+
+## 4. ROLES & PERMISSIONS
+
+### Admin / Owners (Vonnie & Bradley)
+
+**Purpose:** Full access to everything — sales, finance, quoting, production, scheduling, reporting, automations, integrations, user permissions. Can override any status, approve exceptions, and view all monetary values, costs, and margins.
+
+**Responsibilities:** Derived from module access and workflow involvement
+
+**CRUD Permissions:** Based on accessible modules and privacy rules
+
+**Screen Access:** All screens unless restricted
+
+**Workflow State Permissions:** As defined in workflows
+
+**Automation Permissions:** Standard - automations run system-wide
+
+**Limitations / Restrictions:** As per privacy and money rules below
+
+---
+
+### Sales Team (Dave + Future Sales Members)
+
+**Purpose:** Manages all inbound leads, quoting, follow-ups, trade accounts, deposit collection, and customer communication. Can create jobs, generate POs for gate fabrication, update quote stages, and manage their pipeline.
+Cannot view internal cost price, landed costs, or profit margins unless explicitly needed for quoting formulas.
+
+**Responsibilities:** Derived from module access and workflow involvement
+
+**CRUD Permissions:** Based on accessible modules and privacy rules
+
+**Screen Access:** All screens unless restricted
+
+**Workflow State Permissions:** As defined in workflows
+
+**Automation Permissions:** Standard - automations run system-wide
+
+**Limitations / Restrictions:** As per privacy and money rules below
+
+---
+
+### Scheduler (Craig)
+
+**Purpose:** Owns the entire scheduling workflow for production, pickup, and installations. Can see job status, required materials, lead times, staff capacity, and estimated completion dates. Can assign installers, manage calendar conflicts, prioritise urgent orders, and coordinate dispatch.
+Cannot see financials, profit, or margins.
+Can communicate scheduling updates back to Sales.
+
+**Responsibilities:** Derived from module access and workflow involvement
+
+**CRUD Permissions:** Based on accessible modules and privacy rules
+
+**Screen Access:** Scheduling Calendar
+
+**Workflow State Permissions:** Quote Acceptance & Job Creation
+
+**Automation Permissions:** Standard - automations run system-wide
+
+**Limitations / Restrictions:** As per privacy and money rules below
+
+---
+
+### Production Manager (David Turner)
+
+**Purpose:** Manages manufacturing workflow, job routing, BOM requirements, daily task queue, time tracking, job durations, QA, and stock usage. Can move jobs through production stages (“Ready for Production → Cutting → Assembly → QA Complete”).
+Cannot edit customer financials or see sales pipeline.
+
+**Responsibilities:** Derived from module access and workflow involvement
+
+**CRUD Permissions:** Based on accessible modules and privacy rules
+
+**Screen Access:** All screens unless restricted
+
+**Workflow State Permissions:** As defined in workflows
+
+**Automation Permissions:** Standard - automations run system-wide
+
+**Limitations / Restrictions:** As per privacy and money rules below
+
+---
+
+### Production Team / Warehouse (George + future team)
+
+**Purpose:** Executes manufacturing tasks, marks stages complete, tracks time spent on each job, and manages physical inventory. Warehouse staff handle picking lists, packaging, dispatch readiness, and delivery/pickup confirmation.
+No access to quoting or financials.
+
+**Responsibilities:** Derived from module access and workflow involvement
+
+**CRUD Permissions:** Based on accessible modules and privacy rules
+
+**Screen Access:** All screens unless restricted
+
+**Workflow State Permissions:** As defined in workflows
+
+**Automation Permissions:** Standard - automations run system-wide
+
+**Limitations / Restrictions:** As per privacy and money rules below
+
+---
+
+### Installers (Jake + Jarrad + contractors)
+
+**Purpose:** View assigned install jobs, site details, measurements, and customer notes. Upload photos, record variations, report defects, and mark installations complete.
+Cannot see quotes, pricing, deposit amounts, or trade discounts.
+
+**Responsibilities:** Derived from module access and workflow involvement
+
+**CRUD Permissions:** Based on accessible modules and privacy rules
+
+**Screen Access:** All screens unless restricted
+
+**Workflow State Permissions:** As defined in workflows
+
+**Automation Permissions:** Standard - automations run system-wide
+
+**Limitations / Restrictions:** As per privacy and money rules below
+
+---
+
+### Trade Clients (External Portal)
+
+**Purpose:** Access limited to their own quotes, invoices, trade pricing, order status, installation guides, reordering, and support tickets.
+No internal notes, internal pricing structures, margins, or supplier information.
+
+**Responsibilities:** Derived from module access and workflow involvement
+
+**CRUD Permissions:** Based on accessible modules and privacy rules
+
+**Screen Access:** All screens unless restricted
+
+**Workflow State Permissions:** As defined in workflows
+
+**Automation Permissions:** Standard - automations run system-wide
+
+**Limitations / Restrictions:** As per privacy and money rules below
+
+---
+
+### Global Permission Rules
+
+**Privacy Rules:**
+Trade clients see ONLY their jobs and nothing related to other trade accounts or general public orders.
+• Sales cannot edit production workflows, checklists, or internal manufacturing steps.
+• Only Admin can manage automations, rules, workflow structure, and integrated systems.
+• Internal cost price, landed costs, freight, markup structures, and margins hidden from all roles except Admin.
+• Contractor installers have reduced visibility (job details only).
+
+**Money Rules:**
+Trade clients only see their trade pricing and invoice amounts (no internal notes or margins).
+• Cost price, freight, landed cost, and profit margin dashboards visible only to Admin.
+• Refunds, credits, and adjustments can only be created by Admin.
+• Payment statuses (Deposit Paid, Final Paid) not visible to installers, warehouse, or production.
+
+---
+
+## 5. WORKFLOWS
+
+### Lead to Quote Conversion
+
+**Purpose:** Move items through defined stages from trigger to completion
+
+**Trigger:** A new enquiry comes in (phone, website, email, trade portal).
+
+**Stages / Statuses:** Derived from steps below
+
+**Steps / Transitions:**
+1. Sales receives the new lead and enters basic details (client info, job type, site address, measurements if known).
+2. Lead is automatically assigned to a salesperson or manually claimed.
+3. Sales calls the client to clarify details, request measurements, and confirm job requirements.
+4. Sales creates a Quote linked to the Lead.
+5. Sales builds the quote using fence style, heights, components, and install pricing (if required).
+6. Sales sends the quote to the client via email or trade portal.
+7. System tracks quote views and updates the “quote sent” stage.
+8. Sales follows up automatically after X days (automation)
+
+**Allowed Transitions:** Sequential unless otherwise specified
+
+**Preconditions:** Required data must be present before stage transitions
+
+**Who Can Move What:** Roles with access to related modules
+
+**End State:** Quote is delivered to the client, lead is updated to “Quoted.”
+
+**Automations Triggered:** See Section 6
+
+**Notifications:** Based on system rules and reminders
+
+**Guardrails:** See Section 6 guardrails
+
+---
+
+### Quote Acceptance & Job Creation
+
+**Purpose:** Move items through defined stages from trigger to completion
+
+**Trigger:** Client pays the deposit OR clicks “Accept Quote.”
+
+**Stages / Statuses:** Derived from steps below
+
+**Steps / Transitions:**
+1. System marks the quote as “Accepted.”
+2. A new Job is automatically created with job number, client details, site address, and quote link.
+3. Payment record (deposit) is added and synced to Xero.
+4. Scheduler (Craig) is notified of a new job requiring production and install scheduling.
+5. Sales uploads any additional documents or notes required for production.
+6. If a gate is included, system creates a Purchase Order to gate fabricator immediately.
+7. Job status changes to “Ready for Production.”
+
+**End State:** Job is fully created, deposit is logged, and job moves to Production Planning.
+
+**Allowed Transitions:** Sequential unless otherwise specified
+
+**Preconditions:** Required data must be present before stage transitions
+
+**Who Can Move What:** Scheduler (Craig)
+
+**End State:** Job is fully created, deposit is logged, and job moves to Production Planning.
+
+**Automations Triggered:** See Section 6
+
+**Notifications:** Based on system rules and reminders
+
+**Guardrails:** See Section 6 guardrails
+
+---
+
+### Manufacturing & Production Flow
+
+**Purpose:** Move items through defined stages from trigger to completion
+
+**Trigger:** Job enters “Ready for Production.”
+
+**Stages / Statuses:** Derived from steps below
+
+**Steps / Transitions:**
+1. Production Manager reviews BOM and materials required.
+2. Production Tasks are automatically generated (Cutting → Routing → Assembly → QA).
+3. Production staff scan their PIN at workstation to start time tracking.
+4. Staff complete each task, marking it as “Done” and logging time automatically.
+5. Warehouse picks required materials and confirms stock usage.
+6. Production Manager reviews QA photos and measurements.
+7. Scheduler receives update that production is complete.
+
+**Allowed Transitions:** Sequential unless otherwise specified
+
+**Preconditions:** Required data must be present before stage transitions
+
+**Who Can Move What:** Roles with access to related modules
+
+**End State:** Job status moves to “Ready for Install” or “Ready for Pickup.”
+
+**New Logic:** Introduced unified job stages with branching for Supply Only vs. Supply + Install jobs.
+
+**Automations Triggered:** See Section 6
+
+**Notifications:** Based on system rules and reminders
+
+**Guardrails:** See Section 6 guardrails
+
+---
+
+### Scheduling for Production, Delivery, or Install
+
+**Purpose:** Move items through defined stages from trigger to completion
+
+**Trigger:** Job status changes to either “Ready for Production,” “Ready for Install,” or “Ready for Pickup.”
+
+**Stages / Statuses:** Derived from steps below
+
+**Steps / Transitions:**
+1. Craig reviews job timeline, installer availability, material readiness, and required labour.
+2. Craig assigns install dates OR pickup/delivery windows.
+3. System notifies Installers and Sales.
+4. Client receives automated scheduling confirmation.
+5. Installers view job details in their app (measurements, photos, notes).
+6. If changes or delays occur, Craig updates schedule and system notifies all relevant parties.
+
+**Allowed Transitions:** Sequential unless otherwise specified
+
+**Preconditions:** Required data must be present before stage transitions
+
+**Who Can Move What:** Roles with access to related modules
+
+**End State:** Job is scheduled with confirmed dates and assigned resources.
+
+**Automations Triggered:** See Section 6
+
+**Notifications:** Based on system rules and reminders
+
+**Guardrails:** See Section 6 guardrails
+
+---
+
+### Installation & Completion Workflow
+
+**Purpose:** Move items through defined stages from trigger to completion
+
+**Trigger:** Scheduled install date arrives.
+
+**Stages / Statuses:** Derived from steps below
+
+**Steps / Transitions:**
+1. Installers check in on the app at the start of the job.
+2. They upload site photos, notes, and any variations found.
+3. Variations, if any, trigger a notification to Sales to approve cost changes.
+4. Installers complete the install and upload final photos.
+5. Job status changes to “Install Complete.”
+6. Final invoice is automatically generated and Sales sends it to client.
+7. Once final payment is received, job is marked as “Paid in Full.”
+8. Job archive + warranty information is saved to Client profile.
+
+**Allowed Transitions:** Sequential unless otherwise specified
+
+**Preconditions:** Required data must be present before stage transitions
+
+**Who Can Move What:** Roles with access to related modules
+
+**End State:** Job is fully completed, final payment is received, and the job is archived.
+
+**Automations Triggered:** See Section 6
+
+**Notifications:** Based on system rules and reminders
+
+**Guardrails:** See Section 6 guardrails
+
+---
+
+## 6. AUTOMATIONS
+
+### Reminders & Nudges
+
+Send follow-up reminder to Sales 48 hours after a quote is sent if no response.
+• Send nudge to Sales 24 hours after a new lead if no one has contacted the customer.
+• Send automated reminder to client 3 days before scheduled installation.
+• Notify Scheduler (Craig) immediately when a job becomes Ready for Scheduling.
+• Notify Installers at 7am on the morning of their scheduled jobs.
+• Notify Sales when a variation is added by installer, requiring approval.
+• Send payment reminder to client 24 hours after final invoice if unpaid.
+• Notify Admin if a deposit has not been received within 7 days of quote acceptance.
+• Notify Production Manager when materials are below reorder level.
+
+⸻
+
+**Trigger:** Time-based or event-based as described  
+**Conditions:** As specified above  
+**Action:** Send notification/reminder  
+**Error Handling:** Log failures, retry up to 3 times  
+
+---
+
+### System Rules & Automations
+
+Quote & Lead Automation:
+• When a new lead is created → assign to available salesperson.
+• When a quote is sent → automatically create follow-up task for Sales.
+• When quote is accepted → auto-create Job with job number.
+
+Financial Automations:
+• When deposit is received → mark job as “In Progress” and sync payment to Xero.
+• When final payment is received → mark job as “Paid in Full” and archive.
+• Automatically generate invoice numbers following Xero’s sequence.
+
+Production Automations:
+• When job is created → auto-generate BOM based on style + measurements.
+• When job enters “Ready for Production” → auto-create Production Tasks.
+• When all production tasks are complete → update job to “Ready for Install.”
+• Auto-calc labour time using production start/stop logs.
+
+Scheduling Automations:
+• When production is complete → notify Craig to schedule install.
+• When Craig schedules install → send confirmation SMS/email to client.
+• If scheduling date changes → notify Sales + Installer automatically.
+
+Installer Automations:
+• When installer uploads variation → notify Sales instantly for approval.
+• When installer marks job complete → auto-generate final invoice.
+
+Document Automations:
+• When job is archived → store all photos, variations, invoices, and installation docs under Client.
+
+Trade Client Automations:
+• When trade client places order → auto-generate supply-only job.
+• When trade quote accepted → auto-create deposit invoice.
+• Apply correct trade pricing automatically based on discount tier.
+
+⸻
+
+**Trigger:** Event-based as described  
+**Conditions:** As specified above  
+**Action:** Execute business logic  
+**Error Handling:** Log failures, notify admin if critical  
+
+---
+
+### Guardrails (MUST NEVER HAPPEN)
+
+Never double-book installers or schedule overlapping install jobs.
+• Never allow a job to move into production without a confirmed deposit.
+• Never allow production tasks to be marked complete out of sequence (cut → route → assemble → QA).
+• Never allow deletion of records linked to payments or invoices.
+• Never allow trade clients to view internal notes or margins.
+• Never allow warehouse or production staff to change scheduling dates.
+• Never allow Sales to override stock levels or production checklists.
+• Never allow a gate job to proceed without a Purchase Order being created.
+
+---
+
+## 7. INTEGRATIONS
+
+### xero
+
+**Purpose:** Sync invoices, payments, and client financial data.
+
+**Sync Direction:** Real-time (two-way where applicable)
+
+**Scheduling:** Immediate
+
+**Required Capabilities:** 
+• Create invoices (deposit + final)
+• Send invoice to client
+• Sync payment status back to system
+• Pull client data (optional)
+• Webhook for payment received
+
+**API Known:** Yes
+
+**Auth Type:** OAuth2
+
+**Mapping Tables:** Define field mappings during implementation
+
+**Error & Retry Logic:** Log failures, retry with exponential backoff, alert on repeated failures
+
+**Feasibility Notes:** Highly feasible. Xero’s API supports invoices, payments, contacts, and webhooks for real-time updates. Should be used for all financial syncing.
+
+---
+
+### ServiceM8
+
+**Purpose:** If you want to push jobs or sync notes to ServiceM8 for field workflows (optional).
+
+**Sync Direction:** Manual logging
+
+**Scheduling:** On-demand
+
+**Required Capabilities:** 
+• Create job card
+• Update job status
+• Sync photos
+• Pull job history
+• Webhooks for on-site updates
+
+**API Known:** No / Unknown
+
+**Auth Type:** Oauth2
+
+**Mapping Tables:** Define field mappings during implementation
+
+**Error & Retry Logic:** Log failures, retry with exponential backoff, alert on repeated failures
+
+**Feasibility Notes:** ServiceM8 API has limitations. Recommend using this only if the business still wants ServiceM8 in the ecosystem. The new ERP may replace the need entirely.
+
+---
+
+### Outlook Calendar
+
+**Purpose:** Installer schedule sync + admin visibility of installs.
+
+**Sync Direction:** Real-time (two-way where applicable)
+
+**Scheduling:** Immediate
+
+**Required Capabilities:** 
+• Create calendar events
+• Update events on reschedule
+• Delete/cancel events
+• Read availability (optional)
+
+**API Known:** Yes
+
+**Auth Type:** oauth2
+
+**Mapping Tables:** Define field mappings during implementation
+
+**Error & Retry Logic:** Log failures, retry with exponential backoff, alert on repeated failures
+
+**Feasibility Notes:** Easy to implement. Useful for installer visibility and admin oversight.
+
+---
+
+### Twilio (or Vonage)
+
+**Purpose:** Send automated SMS notifications to clients and installers.
+
+**Sync Direction:** Real-time (two-way where applicable)
+
+**Scheduling:** Immediate
+
+**Required Capabilities:** 
+• Send SMS (install reminders, scheduling, payment reminders)
+• Webhook for SMS delivery status
+• Two-way SMS (optional)
+
+**API Known:** Yes
+
+**Auth Type:** Very easy to integrate. Critical for reminders and scheduling confirmations.
+
+**Mapping Tables:** Define field mappings during implementation
+
+**Error & Retry Logic:** Log failures, retry with exponential backoff, alert on repeated failures
+
+**Feasibility Notes:** N/A
+
+---
+
+### SendGrid
+
+**Purpose:** Send automated emails (quotes, invoices, reminders, confirmations).
+
+**Sync Direction:** Real-time (two-way where applicable)
+
+**Scheduling:** Immediate
+
+**Required Capabilities:** 
+• Send templated emails
+• Track opens and clicks
+• Webhook for email delivered/failed
+• High-volume email sending
+
+**API Known:** Yes
+
+**Auth Type:** api key
+
+**Mapping Tables:** Define field mappings during implementation
+
+**Error & Retry Logic:** Log failures, retry with exponential backoff, alert on repeated failures
+
+**Feasibility Notes:** Reliable for automated communications.
+
+---
+
+### n8n or Make (formerly Integromat)
+
+**Purpose:** Allows the ERP to extend into other apps, run automations, or connect legacy apps.
+
+**Sync Direction:** Real-time (two-way where applicable)
+
+**Scheduling:** Immediate
+
+**Required Capabilities:**
+• Trigger webhook from ERP
+• Receive webhook into ERP
+• Pass data between systems
+• Retry logic
+
+**API Known:** Yes
+
+**Auth Type:** Webhook token / API Key
+
+**Mapping Tables:** Define field mappings during implementation
+
+**Error & Retry Logic:** Log failures, retry with exponential backoff, alert on repeated failures
+
+**Feasibility Notes:** Useful for advanced automations or connecting smaller tools without writing custom code.
+
+---
+
+### stripe
+
+**Purpose:** Allow clients to pay deposits or final invoices online directly through the ERP.
+
+**Sync Direction:** Real-time (two-way where applicable)
+
+**Scheduling:** Immediate
+
+**Required Capabilities:**
+• Generate payment links
+• Accept credit card payments
+• Webhook payment confirmation
+• Store transaction ID
+
+**API Known:** Yes
+
+**Auth Type:** api key
+
+**Mapping Tables:** Define field mappings during implementation
+
+**Error & Retry Logic:** Log failures, retry with exponential backoff, alert on repeated failures
+
+**Feasibility Notes:** N/A
+
+---
+
+### Chat / Communications Features
+Here is the perfect wording for the chat features:
+
+**Unified inbox for internal notes and system notifications only. No need for social media messaging integration. System logs:**
+• job updates
+• installer messages
+• variation notes
+• client notifications sent (SMS/email)
+
+**Internal users can reply to system messages but this is not a customer chat system.**
+
+---
+
+## 8. UI / SCREENS
+
+**Global UI Settings:**
+- Brand Vibe: Professional, clean, modern, and trustworthy. A WA-local premium manufacturing brand with an honest, no-BS personality. The interface should feel strong, practical, and efficient — built for installers, warehouse staff, and office teams who need clarity and speed, not fluff. Tone: reliable, structured, calm, confident.
+- Colours: Primary Colour — Dark Teal HEX: #213d42 Usage: navigation, primary buttons, headings, high-visibility areas Personality: strong, grounded, industrial but premium Accent Colour — Orange HEX: #db5c26 Usage: important actions, warnings, CTA emphasis Notes: use sparingly — too much will feel aggressive Light Neutral — Pale Beige HEX: #f5e5d6 Usage: backgrounds, card surfaces, subtle highlights Creates warmth and balance against dark teal Additional UI Notes: • Use white and light grey backgrounds for clarity • Success states should use a muted green (not bright) • Error states should use a deep red, but very sparingly
+- Typography: Primary Font: Inter • Heading Weight: Semi-bold • Body Weight: Regular • Numerical/technical UI: Inter or Roboto • Clean, modern, ultra-readable (important for warehouse screens)
+- Layout: • Left sidebar navigation (strong, simple, fast) • Spacious layout with generous breathing room • High contrast on production screens for visibility in the warehouse • Mobile-first design for installers • Cards and sections should use Pale Beige (#f5e5d6) or white backgrounds • Use Dark Teal (#213d42) for structure + core identity • Use Orange (#db5c26) only for actions or status indicators • Avoid clutter, keep modules clean and functional • Buttons should be large, clearly distinguishable, and consistent • Dashboard should feel “Apple clean” but “construction practical” ⸻
+
+---
+
+### Dashboard Screen
+
+**Purpose:** A high-level overview of jobs, sales activity, production workload, and upcoming installs.
+
+**Key Components:**
+- Navigation: • Left sidebar navigation (strong, simple, fast) • Spacious layout with generous breathing room • High contrast on production screens for visibility in the warehouse • Mobile-first design for installers • Cards and sections should use Pale Beige (#f5e5d6) or white backgrounds • Use Dark Teal (#213d42) for structure + core identity • Use Orange (#db5c26) only for actions or status indicators • Avoid clutter, keep modules clean and functional • Buttons should be large, clearly distinguishable, and consistent • Dashboard should feel “Apple clean” but “construction practical” ⸻
+- Main content area for Today’s Priorities
+• New Leads
+• Quotes Awaiting Follow-Up
+• Jobs In Production
+• Jobs Ready for Install
+• Installer Schedule Snapshot
+• Notifications / Alerts
+- Action buttons for Open lead
+• Open quote
+• Update job stage
+• Assign tasks
+• View schedule
+• Approve variations
+
+**Actions:** Open lead
+• Open quote
+• Update job stage
+• Assign tasks
+• View schedule
+• Approve variations
+
+**Validation:** Enforce required fields and business rules
+
+**Role-Based Differences:** Access limited to Admin, Sales, Scheduler, Production Manager
+
+---
+
+### Leads & Quotes Screen
+
+**Purpose:** Central hub for managing enquiries, building quotes, sending quotes, and tracking conversions.
+
+**Key Components:**
+- Navigation: • Left sidebar navigation (strong, simple, fast) • Spacious layout with generous breathing room • High contrast on production screens for visibility in the warehouse • Mobile-first design for installers • Cards and sections should use Pale Beige (#f5e5d6) or white backgrounds • Use Dark Teal (#213d42) for structure + core identity • Use Orange (#db5c26) only for actions or status indicators • Avoid clutter, keep modules clean and functional • Buttons should be large, clearly distinguishable, and consistent • Dashboard should feel “Apple clean” but “construction practical” ⸻
+- Main content area for • Lead list (kanban stages)
+• Quote builder
+• Quote templates
+• Client details panel
+• Follow-up reminders
+• Quote status timeline
+- Action buttons for Create new lead
+• Convert lead to quote
+• Build/send quote
+• Add notes
+• Log follow-up
+• Mark quote as accepted/declined
+
+**Actions:** Create new lead
+• Convert lead to quote
+• Build/send quote
+• Add notes
+• Log follow-up
+• Mark quote as accepted/declined
+
+**Validation:** Enforce required fields and business rules
+
+**Role-Based Differences:** Access limited to Sales, Admin, Owners
+
+---
+
+### Job Manager Screen
+
+**Purpose:** Main job tracking system from deposit → production → scheduling → install → completion.
+
+**Key Components:**
+- Navigation: • Left sidebar navigation (strong, simple, fast) • Spacious layout with generous breathing room • High contrast on production screens for visibility in the warehouse • Mobile-first design for installers • Cards and sections should use Pale Beige (#f5e5d6) or white backgrounds • Use Dark Teal (#213d42) for structure + core identity • Use Orange (#db5c26) only for actions or status indicators • Avoid clutter, keep modules clean and functional • Buttons should be large, clearly distinguishable, and consistent • Dashboard should feel “Apple clean” but “construction practical” ⸻
+- Main content area for • Job overview
+• Job timeline
+• Site address & client info
+• Materials (BOM)
+• Scheduling panel
+• Production status summary
+• Installer notes & photos
+• Documents
+- Action buttons for Update job status
+• Upload documents
+• View materials
+• Add install notes
+• Approve or request variations
+• Close job
+
+**Actions:** Update job status
+• Upload documents
+• View materials
+• Add install notes
+• Approve or request variations
+• Close job
+
+**Validation:** Enforce required fields and business rules
+
+**Role-Based Differences:** Access limited to Admin, Sales, Scheduler, Production Manager, Warehouse, Installers (limited)
+
+---
+
+### Production Manager Screen
+
+**Purpose:** Tracks manufacturing tasks, time spent, stock usage, and QA.
+
+**Key Components:**
+- Navigation: • Left sidebar navigation (strong, simple, fast) • Spacious layout with generous breathing room • High contrast on production screens for visibility in the warehouse • Mobile-first design for installers • Cards and sections should use Pale Beige (#f5e5d6) or white backgrounds • Use Dark Teal (#213d42) for structure + core identity • Use Orange (#db5c26) only for actions or status indicators • Avoid clutter, keep modules clean and functional • Buttons should be large, clearly distinguishable, and consistent • Dashboard should feel “Apple clean” but “construction practical” ⸻
+- Main content area for Daily task queue
+• Production tasks per job
+• Cutting list
+• Routing list
+• Assembly list
+• QA checks
+• Time tracking dashboard
+• Stock usage
+- Action buttons for Start/stop manufacturing task
+• Mark step complete
+• Update QA results
+• Allocate staff
+• Record materials used
+• Flag shortages
+
+**Actions:** Start/stop manufacturing task
+• Mark step complete
+• Update QA results
+• Allocate staff
+• Record materials used
+• Flag shortages
+
+**Validation:** Enforce required fields and business rules
+
+**Role-Based Differences:** Access limited to Production Manager, Warehouse, Admin
+
+---
+
+### Scheduling Calendar Screen
+
+**Purpose:** Centralised booking and scheduling for production, site measures, pickups, deliveries, and installs.
+
+**Key Components:**
+- Navigation: • Left sidebar navigation (strong, simple, fast) • Spacious layout with generous breathing room • High contrast on production screens for visibility in the warehouse • Mobile-first design for installers • Cards and sections should use Pale Beige (#f5e5d6) or white backgrounds • Use Dark Teal (#213d42) for structure + core identity • Use Orange (#db5c26) only for actions or status indicators • Avoid clutter, keep modules clean and functional • Buttons should be large, clearly distinguishable, and consistent • Dashboard should feel “Apple clean” but “construction practical” ⸻
+- Main content area for • Calendar view (day/week/month)
+• Installers list
+• Job readiness panel
+• Capacity overview
+• Pending jobs
+• Scheduling actions
+- Action buttons for Assign install dates
+• Assign delivery/pickup
+• Reschedule
+• Notify client
+• Notify installer
+• Mark confirmed
+
+**Actions:** Assign install dates
+• Assign delivery/pickup
+• Reschedule
+• Notify client
+• Notify installer
+• Mark confirmed
+
+**Validation:** Enforce required fields and business rules
+
+**Role-Based Differences:** Access limited to Scheduler (Craig), Admin, Sales (view only), Installers (view only)
+
+---
+
+### Installer App Screen
+
+**Purpose:** Lightweight mobile-friendly screen for installers to do onsite work.
+
+**Key Components:**
+- Navigation: • Left sidebar navigation (strong, simple, fast) • Spacious layout with generous breathing room • High contrast on production screens for visibility in the warehouse • Mobile-first design for installers • Cards and sections should use Pale Beige (#f5e5d6) or white backgrounds • Use Dark Teal (#213d42) for structure + core identity • Use Orange (#db5c26) only for actions or status indicators • Avoid clutter, keep modules clean and functional • Buttons should be large, clearly distinguishable, and consistent • Dashboard should feel “Apple clean” but “construction practical” ⸻
+- Main content area for Today’s Jobs
+• Job Details
+• Address + Map
+• Materials
+• Photos (before/after)
+• Variations
+• Completion steps
+
+- Action buttons for Check-in
+• Upload photos
+• Add notes
+• Record variations
+• Mark job complete
+
+**Actions:** Check-in
+• Upload photos
+• Add notes
+• Record variations
+• Mark job complete
+
+**Validation:** Enforce required fields and business rules
+
+**Role-Based Differences:** Access limited to Installers
+
+---
+
+### Clients Screen
+
+**Purpose:** Central client database storing history, contact info, jobs, quotes.
+
+**Key Components:**
+- Navigation: • Left sidebar navigation (strong, simple, fast) • Spacious layout with generous breathing room • High contrast on production screens for visibility in the warehouse • Mobile-first design for installers • Cards and sections should use Pale Beige (#f5e5d6) or white backgrounds • Use Dark Teal (#213d42) for structure + core identity • Use Orange (#db5c26) only for actions or status indicators • Avoid clutter, keep modules clean and functional • Buttons should be large, clearly distinguishable, and consistent • Dashboard should feel “Apple clean” but “construction practical” ⸻
+- Main content area for Client profile
+• Contact info
+• Job history
+• Quotes history
+• Documents
+• Notes
+- Action buttons for Edit client
+• Add notes
+• Create new quote
+• View documents
+• Upload files
+
+**Actions:** Edit client
+• Add notes
+• Create new quote
+• View documents
+• Upload files
+
+**Validation:** Enforce required fields and business rules
+
+**Role-Based Differences:** Access limited to Admin, Sales
+
+---
+
+### Trade Portal Screen
+
+**Purpose:** Allows trade customers to view quotes, accept jobs, pay deposits, and track orders.
+
+**Key Components:**
+- Navigation: • Left sidebar navigation (strong, simple, fast) • Spacious layout with generous breathing room • High contrast on production screens for visibility in the warehouse • Mobile-first design for installers • Cards and sections should use Pale Beige (#f5e5d6) or white backgrounds • Use Dark Teal (#213d42) for structure + core identity • Use Orange (#db5c26) only for actions or status indicators • Avoid clutter, keep modules clean and functional • Buttons should be large, clearly distinguishable, and consistent • Dashboard should feel “Apple clean” but “construction practical” ⸻
+- Main content area for • My Quotes
+• My Orders
+• Track Job
+• Installation Guides
+• Reorder materials
+- Action buttons for Accept quote
+• Pay deposit
+• Download installation PDFs
+• Request support
+
+**Actions:** Accept quote
+• Pay deposit
+• Download installation PDFs
+• Request support
+
+**Validation:** Enforce required fields and business rules
+
+**Role-Based Differences:** Access limited to Trade Clients (external)
+
+---
+
+### Products & Inventory Screen
+
+**Purpose:** Manages SKUs, stock levels, cost, and BOM linking.
+
+**Key Components:**
+- Navigation: • Left sidebar navigation (strong, simple, fast) • Spacious layout with generous breathing room • High contrast on production screens for visibility in the warehouse • Mobile-first design for installers • Cards and sections should use Pale Beige (#f5e5d6) or white backgrounds • Use Dark Teal (#213d42) for structure + core identity • Use Orange (#db5c26) only for actions or status indicators • Avoid clutter, keep modules clean and functional • Buttons should be large, clearly distinguishable, and consistent • Dashboard should feel “Apple clean” but “construction practical” ⸻
+- Main content area for Product list
+• Stock on hand
+• Low stock alerts
+• BOM mapping
+• Cut lists
+• Inventory adjustments
+- Action buttons for Add product
+• Edit stock levels
+• Record stock usage
+• Generate low-stock alerts
+
+**Actions:** Add product
+• Edit stock levels
+• Record stock usage
+• Generate low-stock alerts
+
+**Validation:** Enforce required fields and business rules
+
+**Role-Based Differences:** Access limited to Admin, Production Manager, Warehouse
+
+---
+
+### Finance & Payments Screen
+
+**Purpose:** Handles deposits, finals, credit notes, and syncs to Xero.
+
+**Key Components:**
+- Navigation: • Left sidebar navigation (strong, simple, fast) • Spacious layout with generous breathing room • High contrast on production screens for visibility in the warehouse • Mobile-first design for installers • Cards and sections should use Pale Beige (#f5e5d6) or white backgrounds • Use Dark Teal (#213d42) for structure + core identity • Use Orange (#db5c26) only for actions or status indicators • Avoid clutter, keep modules clean and functional • Buttons should be large, clearly distinguishable, and consistent • Dashboard should feel “Apple clean” but “construction practical” ⸻
+- Main content area for All payments
+• Pending payments
+• Invoice history
+• Xero sync status
+• Refunds/credits
+- Action buttons for Record payment
+• Mark invoice sent
+• Sync to Xero
+• Raise refund/credit
+
+**Actions:** Record payment
+• Mark invoice sent
+• Sync to Xero
+• Raise refund/credit
+
+**Validation:** Enforce required fields and business rules
+
+**Role-Based Differences:** Access limited to Admin, Sales
+
+---
+
+## 9. REPORTING
+
+### Dashboards & Metrics
+
+**Metrics to Track:**
+Sales & Lead Metrics:
+• Number of new leads per week
+• Quote conversion rate
+• Average time from lead → quote sent
+• Average time from quote sent → deposit paid
+• Salesperson conversion performance
+• Declined quotes reasons
+
+Production Metrics:
+• Jobs in production
+• Average production time per job
+• Time spent per production task (cutting, routing, assembly, QA)
+• Production delays (jobs exceeding expected time)
+• Material usage vs expected BOM
+• Staff time-tracking productivity
+
+Installation Metrics:
+• Number of installs completed per week
+• Installer performance (on-time completion, photos uploaded, variations logged)
+• Average install duration
+• Repeat site visits / rework
+• Variations created by installers
+
+Financial Metrics:
+• Revenue by month
+• Deposits received
+• Final payments received
+• Outstanding invoices
+• Average job value
+• Margin reports (Admin only)
+
+Trade Client Metrics:
+• Trade order volume
+• Trade quote acceptance rate
+• Top-performing trade accounts
+• Repeat orders frequency
+
+Operational Metrics:
+• Jobs by stage (Quote Sent, Accepted, Production, Ready for Install, Completed)
+• Scheduling efficiency (install date vs actual production completion)
+• Jobs exceeding schedule estimates
+• Stock low / out-of-stock alerts
+
+**Reporting Audience:**
+Admin / Owners:
+• Full financial reporting
+• Margin & profitability
+• Sales performance
+• Production efficiency
+• Installer performance
+• Job pipeline
+
+Sales Team:
+• Leads & conversion rates
+• Quote pipeline
+• Follow-up due
+• Accepted vs declined quotes
+• Commission reports (optional)
+
+Scheduler (Craig):
+• Upcoming jobs requiring dates
+• Install capacity per week
+• Production readiness
+• Calendar utilisation (%)
+
+Production Manager:
+• Production queue
+• Task duration per staff member
+• Material usage variance
+• Jobs at risk of delay
+
+Installers:
+• Their own job completion rate
+• On-time statistics
+• Rework statistics (optional)
+
+Trade Clients (Portal):
+• Their orders only
+• Order statuses
+• Payment history
+
+**Fun / Culture Metrics (Internal Only):**
+• Fastest install completion this week
+• Most accurate production timing logs
+• “Zero Rework” streak counter for installers
+• Production MVP of the month
+• Sales leaderboard for quote conversions
+• Attendance streak for on-time scheduling
+• “Cleanest QA Pass” badge for production staff
+• “No Variations Found” badge for installers
+
+These create culture, fun, internal competitiveness, and clear recognition.
+
+**Filters:** Date range, role-based, entity-based as appropriate
+
+**Data Sources:** All entities defined in Section 3
+
+**Update Frequency:** Real-time where possible, otherwise daily refresh
+
+---
+
+## 10. APPENDICES
+
+### Version Notes
+- Version: 2
+- App Name: Probuild PVC ERP & CRM
+- Industry: General
+
+### Applied Change Requests
+- Richer Calendar Views & Production/PO Scheduling
+- Unified Job Stages + Branching Logic for Supply-Only vs Supply+Install Jobs
+- Add Lead Type (Public / Trade)
+- Internal Quote Version History + Version Apply Button
+- Fix: Role Permissions Conflict
+- Fix: Inconsistent Workflow Steps
+- Fix: Overlapping Responsibilities in Roles
+- Add “Tools & Forms Library” Module for Client-Facing Tools 
+
+### Glossary
+- Define key terms specific to this system during implementation
+
+### Build Instructions
+
+1. **Data Model First:** Create all entities from Section 3 with proper relationships
+2. **Roles & Permissions:** Implement role-based access from Section 4
+3. **Core Modules:** Build screens from Section 8, respecting role access
+4. **Workflows:** Implement state machines from Section 5
+5. **Automations:** Add triggers and guardrails from Section 6
+6. **Integrations:** Connect external systems from Section 7
+7. **Reporting:** Build dashboards from Section 9
+8. **Testing:** Validate all guardrails and permission rules
