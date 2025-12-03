@@ -342,8 +342,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createLead(lead: InsertLead): Promise<Lead> {
-    const [created] = await db.insert(leads).values(lead).returning();
+    const leadNumber = await this.generateLeadNumber();
+    const [created] = await db.insert(leads).values({
+      ...lead,
+      leadNumber,
+    }).returning();
     return created;
+  }
+
+  private async generateLeadNumber(): Promise<string> {
+    const [result] = await db.select({ maxNumber: sql<string>`MAX(lead_number)` }).from(leads);
+    if (!result?.maxNumber) {
+      return 'PVC-001';
+    }
+    const match = result.maxNumber.match(/PVC-(\d+)/);
+    if (!match) {
+      return 'PVC-001';
+    }
+    const nextNum = parseInt(match[1], 10) + 1;
+    return `PVC-${nextNum.toString().padStart(3, '0')}`;
   }
 
   async updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead | undefined> {
@@ -466,8 +483,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createQuote(quote: InsertQuote): Promise<Quote> {
-    const [created] = await db.insert(quotes).values(quote as any).returning();
+    let quoteNumber = quote.quoteNumber;
+    
+    if (quote.leadId) {
+      quoteNumber = await this.generateQuoteNumber(quote.leadId);
+    } else if (!quoteNumber) {
+      quoteNumber = await this.getNextQuoteNumber();
+    }
+    
+    const [created] = await db.insert(quotes).values({
+      ...quote,
+      quoteNumber,
+    } as any).returning();
     return created;
+  }
+
+  private async generateQuoteNumber(leadId: string): Promise<string> {
+    const lead = await this.getLead(leadId);
+    if (!lead?.leadNumber) {
+      return this.getNextQuoteNumber();
+    }
+    
+    const existingQuotes = await db.select({ count: sql<number>`count(*)` })
+      .from(quotes)
+      .where(eq(quotes.leadId, leadId));
+    const quoteSeq = (existingQuotes[0]?.count || 0) + 1;
+    return `${lead.leadNumber}-Q${quoteSeq}`;
   }
 
   async updateQuote(id: string, quote: Partial<InsertQuote>): Promise<Quote | undefined> {
@@ -526,7 +567,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createJob(job: InsertJob): Promise<Job> {
-    const [created] = await db.insert(jobs).values(job as any).returning();
+    let jobNumber = job.jobNumber;
+    let invoiceNumber = (job as any).invoiceNumber;
+    let leadId = (job as any).leadId;
+    
+    if (job.quoteId && !leadId) {
+      const quote = await this.getQuote(job.quoteId);
+      if (quote?.leadId) {
+        leadId = quote.leadId;
+      }
+    }
+    
+    if (leadId) {
+      const lead = await this.getLead(leadId);
+      if (lead?.leadNumber) {
+        jobNumber = `${lead.leadNumber}-JOB`;
+        invoiceNumber = `${lead.leadNumber}-INV`;
+      }
+    }
+    
+    if (!jobNumber) {
+      jobNumber = await this.getNextJobNumber();
+    }
+    
+    const [created] = await db.insert(jobs).values({
+      ...job,
+      jobNumber,
+      invoiceNumber,
+      leadId,
+    } as any).returning();
     return created;
   }
 
