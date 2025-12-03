@@ -42,33 +42,46 @@ async function getCredentials() {
       
       connectionSettings = data.items?.[0];
 
-      if (connectionSettings?.settings?.account_sid && 
-          connectionSettings?.settings?.api_key && 
-          connectionSettings?.settings?.api_key_secret) {
-        const accountSid = connectionSettings.settings.account_sid;
-        const apiKey = connectionSettings.settings.api_key;
-        const apiKeySecret = connectionSettings.settings.api_key_secret;
-        const phoneNumber = connectionSettings.settings.phone_number || null;
-        
-        console.log('Twilio credentials check:');
-        console.log('  - account_sid present:', !!accountSid && accountSid.startsWith('AC'));
-        console.log('  - api_key present:', !!apiKey && apiKey.startsWith('SK'));
-        console.log('  - api_key_secret present:', !!apiKeySecret && apiKeySecret.length > 0);
-        console.log('  - phone_number:', phoneNumber);
-        
+      const settings = connectionSettings?.settings;
+      console.log('Twilio connector all settings keys:', Object.keys(settings || {}));
+      
+      const accountSid = settings?.account_sid;
+      const authToken = settings?.auth_token;
+      const apiKey = settings?.api_key;
+      const apiKeySecret = settings?.api_key_secret;
+      const phoneNumber = settings?.phone_number || null;
+      
+      console.log('Twilio connector settings available:');
+      console.log('  - account_sid:', !!accountSid);
+      console.log('  - auth_token:', !!authToken);
+      console.log('  - api_key:', !!apiKey);
+      console.log('  - api_key_secret:', !!apiKeySecret);
+      console.log('  - phone_number:', phoneNumber);
+      
+      // Prefer Auth Token if available
+      if (accountSid && authToken) {
+        console.log('Using Auth Token authentication');
+        return {
+          accountSid,
+          authToken,
+          phoneNumber,
+          useAuthToken: true
+        };
+      }
+      
+      // Fall back to API Key authentication
+      if (accountSid && apiKey && apiKeySecret) {
+        console.log('Using API Key authentication');
         return {
           accountSid,
           apiKey,
           apiKeySecret,
-          phoneNumber
+          phoneNumber,
+          useApiKey: true
         };
-      } else {
-        console.log('Twilio connector settings incomplete:', {
-          hasAccountSid: !!connectionSettings?.settings?.account_sid,
-          hasApiKey: !!connectionSettings?.settings?.api_key,
-          hasApiKeySecret: !!connectionSettings?.settings?.api_key_secret
-        });
       }
+      
+      console.log('Twilio connector settings incomplete');
     } catch (error) {
       console.log('Twilio connector error:', error);
     }
@@ -100,15 +113,18 @@ export async function getTwilioClient(): Promise<Twilio | null> {
   }
 
   if ('useAuthToken' in credentials && credentials.useAuthToken) {
-    twilioClientInstance = twilio(credentials.accountSid, credentials.authToken);
-  } else if ('apiKey' in credentials) {
-    // Use Australian regional endpoint for AU API keys
-    twilioClientInstance = twilio(credentials.apiKey, credentials.apiKeySecret, {
-      accountSid: credentials.accountSid,
+    // Use Australian regional endpoint for AU accounts
+    twilioClientInstance = twilio(credentials.accountSid, credentials.authToken, {
       region: 'au1',
       edge: 'sydney'
     });
-    console.log('Twilio client initialized with AU region (au1/sydney)');
+    console.log('Twilio client initialized with Auth Token (AU region au1/sydney)');
+  } else if ('useApiKey' in credentials && credentials.useApiKey) {
+    // Use API Key authentication - use global endpoint (AU region doesn't support SMS)
+    twilioClientInstance = twilio(credentials.apiKey, credentials.apiKeySecret, {
+      accountSid: credentials.accountSid
+    });
+    console.log('Twilio client initialized with API Key (global endpoint)');
   }
 
   twilioPhoneNumber = credentials.phoneNumber;
