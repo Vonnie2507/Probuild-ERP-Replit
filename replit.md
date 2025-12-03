@@ -88,6 +88,26 @@ All endpoints use `/api/` prefix:
   - Trade quote toggle with discount calculations
   - Materials subtotal, labour, and deposit calculations
   - Draft save or direct send options
+- **CRM Messaging/SMS**: Bidirectional SMS system via Twilio integration:
+  - Conversation threads grouped by phone number
+  - Real-time message display with optimistic updates
+  - Automated notifications for leads, quotes, payments
+  - SMS logs stored in database with isOutbound field
+- **Notification System**: Real-time notifications with database persistence:
+  - Automatic triggers for leads, quotes, payments, job status
+  - Header bell icon with unread count (30-second polling)
+  - Mark as read and dismiss functionality
+  - NotificationPanel with virtualized list
+- **Calendar Event Management**: Full CRUD for schedule events:
+  - Create/Edit/Delete dialogs with react-hook-form
+  - Event types: install, delivery, pickup, site_measure
+  - Installer assignment and job linking
+  - Backend ISO string to Date object conversion
+- **CSV Export**: Data export for all major entities:
+  - Export buttons on Payments, Jobs, Clients, Leads, Inventory pages
+  - Proper CSV headers (Content-Type, Content-Disposition)
+  - Field escaping for commas/quotes
+  - AU date formatting (DD/MM/YYYY)
 
 ## Development Notes
 - All pages connected to real backend APIs
