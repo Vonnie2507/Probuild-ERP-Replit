@@ -199,6 +199,22 @@ export async function registerRoutes(
     try {
       const validatedData = insertLeadSchema.parse(req.body);
       const lead = await storage.createLead(validatedData);
+
+      const admins = await storage.getUsersByRole("admin");
+      const sales = await storage.getUsersByRole("sales");
+      const notifyUsers = [...admins, ...sales];
+      
+      for (const user of notifyUsers) {
+        await storage.createNotification({
+          userId: user.id,
+          type: "lead_new",
+          title: "New Lead Created",
+          message: lead.description || `New ${lead.leadType} lead from ${lead.source}`,
+          relatedEntityType: "lead",
+          relatedEntityId: lead.id,
+        });
+      }
+
       res.status(201).json(lead);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -425,6 +441,21 @@ export async function registerRoutes(
         quoteNumber,
       });
       const quote = await storage.createQuote(validatedData);
+
+      const client = quote.clientId ? await storage.getClient(quote.clientId) : null;
+      const admins = await storage.getUsersByRole("admin");
+      
+      for (const user of admins) {
+        await storage.createNotification({
+          userId: user.id,
+          type: "quote_created",
+          title: "New Quote Created",
+          message: `Quote ${quote.quoteNumber} for ${client?.name || "Unknown client"} - $${parseFloat(quote.totalAmount || "0").toLocaleString()}`,
+          relatedEntityType: "quote",
+          relatedEntityId: quote.id,
+        });
+      }
+
       res.status(201).json(quote);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -437,10 +468,32 @@ export async function registerRoutes(
 
   app.patch("/api/quotes/:id", async (req, res) => {
     try {
+      const oldQuote = await storage.getQuote(req.params.id);
       const quote = await storage.updateQuote(req.params.id, req.body);
       if (!quote) {
         return res.status(404).json({ error: "Quote not found" });
       }
+
+      if (oldQuote && oldQuote.status !== quote.status) {
+        if (quote.status === "approved") {
+          const client = quote.clientId ? await storage.getClient(quote.clientId) : null;
+          const admins = await storage.getUsersByRole("admin");
+          const sales = await storage.getUsersByRole("sales");
+          const notifyUsers = [...admins, ...sales];
+          
+          for (const user of notifyUsers) {
+            await storage.createNotification({
+              userId: user.id,
+              type: "quote_approved",
+              title: "Quote Approved",
+              message: `Quote ${quote.quoteNumber} approved by ${client?.name || "client"} - $${parseFloat(quote.totalAmount || "0").toLocaleString()}`,
+              relatedEntityType: "quote",
+              relatedEntityId: quote.id,
+            });
+          }
+        }
+      }
+
       res.json(quote);
     } catch (error) {
       console.error("Error updating quote:", error);
@@ -577,10 +630,50 @@ export async function registerRoutes(
   app.patch("/api/jobs/:id/status", async (req, res) => {
     try {
       const { status } = req.body;
+      const oldJob = await storage.getJob(req.params.id);
       const job = await storage.updateJob(req.params.id, { status });
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
+
+      if (oldJob && oldJob.status !== job.status) {
+        const client = await storage.getClient(job.clientId);
+        const admins = await storage.getUsersByRole("admin");
+        
+        const statusMessages: Record<string, { title: string; type: string }> = {
+          "scheduled": { title: "Job Scheduled", type: "job_scheduled" },
+          "ready_for_install": { title: "Job Ready for Installation", type: "job_ready" },
+          "in_progress": { title: "Job Installation Started", type: "job_started" },
+          "completed": { title: "Job Completed", type: "job_complete" },
+          "manufacturing_panels": { title: "Job in Production", type: "job_production" },
+        };
+
+        const statusInfo = statusMessages[job.status];
+        if (statusInfo) {
+          for (const user of admins) {
+            await storage.createNotification({
+              userId: user.id,
+              type: statusInfo.type,
+              title: statusInfo.title,
+              message: `${job.jobNumber} - ${client?.name || "Unknown client"} - ${job.fenceStyle || "Fence"}`,
+              relatedEntityType: "job",
+              relatedEntityId: job.id,
+            });
+          }
+
+          if (job.assignedInstaller) {
+            await storage.createNotification({
+              userId: job.assignedInstaller,
+              type: statusInfo.type,
+              title: statusInfo.title,
+              message: `${job.jobNumber} - ${job.siteAddress}`,
+              relatedEntityType: "job",
+              relatedEntityId: job.id,
+            });
+          }
+        }
+      }
+
       res.json(job);
     } catch (error) {
       console.error("Error updating job status:", error);
@@ -938,10 +1031,35 @@ export async function registerRoutes(
 
   app.patch("/api/payments/:id", async (req, res) => {
     try {
+      const oldPayment = await storage.getPayment(req.params.id);
       const payment = await storage.updatePayment(req.params.id, req.body);
       if (!payment) {
         return res.status(404).json({ error: "Payment not found" });
       }
+
+      if (oldPayment && oldPayment.status !== payment.status && payment.status === "completed") {
+        const client = await storage.getClient(payment.clientId);
+        const admins = await storage.getUsersByRole("admin");
+        const sales = await storage.getUsersByRole("sales");
+        const notifyUsers = [...admins, ...sales];
+        
+        const formattedAmount = parseFloat(payment.amount).toLocaleString("en-AU", { 
+          style: "currency", 
+          currency: "AUD" 
+        });
+
+        for (const user of notifyUsers) {
+          await storage.createNotification({
+            userId: user.id,
+            type: "payment_received",
+            title: "Payment Received",
+            message: `${formattedAmount} ${payment.paymentType} payment from ${client?.name || "Unknown client"}`,
+            relatedEntityType: "payment",
+            relatedEntityId: payment.id,
+          });
+        }
+      }
+
       res.json(payment);
     } catch (error) {
       console.error("Error updating payment:", error);

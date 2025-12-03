@@ -7,9 +7,10 @@ import {
 async function seed() {
   console.log("Seeding database...");
 
-  // Clear existing data
+  // Clear existing data (order matters due to foreign key constraints)
   await db.delete(notifications);
   await db.delete(payments);
+  await db.delete(scheduleEvents);
   await db.delete(installTasks);
   await db.delete(productionTasks);
   await db.delete(jobs);
@@ -533,11 +534,47 @@ async function seed() {
   await db.insert(notifications).values([
     {
       userId: salesUser.id,
+      type: "lead_new",
+      title: "New Lead Created",
+      message: "Looking for Hampton style fence for backyard - Sarah Smith",
+      relatedEntityType: "lead",
+      relatedEntityId: lead1.id,
+      createdAt: new Date(Date.now() - 2 * 60 * 1000),
+    },
+    {
+      userId: salesUser.id,
+      type: "quote_approved",
+      title: "Quote Approved",
+      message: "Quote Q-2024-0002 approved by WA Landscape Co - $14,800.00",
+      relatedEntityType: "quote",
+      relatedEntityId: quote2.id,
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    },
+    {
+      userId: salesUser.id,
+      type: "payment_received",
+      title: "Payment Received",
+      message: "$6,260.50 deposit payment from Sarah Smith",
+      relatedEntityType: "payment",
+      createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
+    },
+    {
+      userId: salesUser.id,
+      type: "job_scheduled",
+      title: "Job Scheduled",
+      message: "JOB-2024-0088 - Sarah Smith - Hampton fence installation",
+      relatedEntityType: "job",
+      relatedEntityId: job2.id,
+      createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
+    },
+    {
+      userId: salesUser.id,
       type: "lead_assigned",
-      title: "New lead assigned",
-      message: "A new lead from Emma Thompson has been assigned to you",
+      title: "Lead Assigned to You",
+      message: "Pool fencing enquiry from James Johnson assigned to you",
       relatedEntityType: "lead",
       relatedEntityId: lead3.id,
+      createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
     },
     {
       userId: schedulerUser.id,
