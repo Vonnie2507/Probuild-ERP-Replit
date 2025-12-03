@@ -32,10 +32,14 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Filter, LayoutGrid, List, Download } from "lucide-react";
+import { Plus, Search, Filter, LayoutGrid, List, Download, Phone, Mail, MapPin, FileText, Edit, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Lead, Client, InsertLead } from "@shared/schema";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import type { Lead, Client, InsertLead, Quote } from "@shared/schema";
 
 type LeadStatus = "new" | "contacted" | "quoted" | "approved" | "declined";
 
@@ -64,6 +68,8 @@ export default function Leads() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isQuoteBuilderOpen, setIsQuoteBuilderOpen] = useState(false);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [leadToDelete, setLeadToDelete] = useState<KanbanLead | null>(null);
   const [selectedLeadForQuote, setSelectedLeadForQuote] = useState<Lead | null>(null);
@@ -83,6 +89,10 @@ export default function Leads() {
 
   const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
+  });
+
+  const { data: quotes = [] } = useQuery<Quote[]>({
+    queryKey: ["/api/quotes"],
   });
 
   const createLeadMutation = useMutation({
@@ -235,10 +245,23 @@ export default function Leads() {
   }));
 
   const handleLeadClick = (lead: KanbanLead) => {
-    toast({
-      title: "Lead Selected",
-      description: `Opening ${lead.clientName}'s details`,
-    });
+    const originalLead = leads.find(l => l.id === lead.id);
+    if (originalLead) {
+      setSelectedLead(originalLead);
+      setIsDetailDialogOpen(true);
+    }
+  };
+
+  const getLeadQuotes = (leadId: string) => {
+    return quotes.filter(q => q.leadId === leadId);
+  };
+
+  const formatCurrency = (amount: string | number | null) => {
+    if (!amount) return "$0.00";
+    return new Intl.NumberFormat("en-AU", {
+      style: "currency",
+      currency: "AUD",
+    }).format(Number(amount));
   };
 
   const handleConvertToQuote = (lead: KanbanLead) => {
@@ -589,6 +612,189 @@ export default function Leads() {
           : undefined}
         onQuoteCreated={handleQuoteCreated}
       />
+
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-xl">Lead Details</DialogTitle>
+            </div>
+            <DialogDescription>
+              View lead information and associated quotes
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedLead && (
+            <ScrollArea className="flex-1 -mx-6 px-6">
+              <div className="space-y-6 pb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={selectedLead.leadType === "trade" ? "default" : "secondary"}>
+                      {selectedLead.leadType}
+                    </Badge>
+                    <Badge variant="outline">{selectedLead.stage}</Badge>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setIsDetailDialogOpen(false);
+                        const kanbanLead = kanbanLeads.find(l => l.id === selectedLead.id);
+                        if (kanbanLead) handleEditLead(kanbanLead);
+                      }}
+                      data-testid="button-edit-lead-detail"
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedLeadForQuote(selectedLead);
+                        setIsDetailDialogOpen(false);
+                        setIsQuoteBuilderOpen(true);
+                      }}
+                      data-testid="button-create-quote-detail"
+                    >
+                      <FileText className="h-4 w-4 mr-1" />
+                      Create Quote
+                    </Button>
+                  </div>
+                </div>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Contact Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {(() => {
+                      const client = selectedLead.clientId ? clients.find(c => c.id === selectedLead.clientId) : null;
+                      return (
+                        <>
+                          <div className="font-medium text-lg">
+                            {client?.name || "No client linked"}
+                          </div>
+                          {client?.phone && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Phone className="h-4 w-4" />
+                              <a href={`tel:${client.phone}`} className="hover:underline">{client.phone}</a>
+                            </div>
+                          )}
+                          {client?.email && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Mail className="h-4 w-4" />
+                              <a href={`mailto:${client.email}`} className="hover:underline">{client.email}</a>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                    {selectedLead.siteAddress && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <MapPin className="h-4 w-4" />
+                        {selectedLead.siteAddress}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Project Details</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Fence Style:</span>
+                        <div className="font-medium">{selectedLead.fenceStyle || "Not specified"}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Length:</span>
+                        <div className="font-medium">{selectedLead.fenceLength ? `${selectedLead.fenceLength}m` : "Not specified"}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Source:</span>
+                        <div className="font-medium capitalize">{selectedLead.source?.replace("_", " ") || "Unknown"}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Measurements:</span>
+                        <div className="font-medium">{selectedLead.measurementsProvided ? "Provided" : "Not yet"}</div>
+                      </div>
+                    </div>
+                    {selectedLead.description && (
+                      <div className="pt-2">
+                        <span className="text-sm text-muted-foreground">Description:</span>
+                        <p className="mt-1">{selectedLead.description}</p>
+                      </div>
+                    )}
+                    {selectedLead.notes && (
+                      <div className="pt-2">
+                        <span className="text-sm text-muted-foreground">Notes:</span>
+                        <p className="mt-1">{selectedLead.notes}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Associated Quotes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {(() => {
+                      const leadQuotes = getLeadQuotes(selectedLead.id);
+                      if (leadQuotes.length === 0) {
+                        return (
+                          <p className="text-sm text-muted-foreground">No quotes created yet.</p>
+                        );
+                      }
+                      return (
+                        <div className="space-y-2">
+                          {leadQuotes.map((quote) => (
+                            <div
+                              key={quote.id}
+                              className="flex items-center justify-between p-3 border rounded-lg hover-elevate cursor-pointer"
+                              onClick={() => {
+                                toast({
+                                  title: "Quote Selected",
+                                  description: `Quote ${quote.quoteNumber} - ${formatCurrency(quote.totalAmount)}`,
+                                });
+                              }}
+                              data-testid={`quote-item-${quote.id}`}
+                            >
+                              <div>
+                                <div className="font-medium">{quote.quoteNumber}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  {formatCurrency(quote.totalAmount)}
+                                </div>
+                              </div>
+                              <Badge
+                                variant={
+                                  quote.status === "approved"
+                                    ? "default"
+                                    : quote.status === "sent"
+                                    ? "secondary"
+                                    : quote.status === "declined"
+                                    ? "destructive"
+                                    : "outline"
+                                }
+                              >
+                                {quote.status}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
