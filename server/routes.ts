@@ -1186,6 +1186,17 @@ export async function registerRoutes(
     relatedEntityId: z.string().optional(),
   });
 
+  const formatPhoneNumber = (phone: string): string => {
+    let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+    if (cleaned.startsWith('0')) {
+      cleaned = '+61' + cleaned.substring(1);
+    }
+    if (!cleaned.startsWith('+')) {
+      cleaned = '+61' + cleaned;
+    }
+    return cleaned;
+  };
+
   app.post("/api/sms/send", async (req, res) => {
     try {
       const parseResult = smsSendSchema.safeParse(req.body);
@@ -1193,6 +1204,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: parseResult.error.errors[0].message });
       }
       const { to, message, recipientName, relatedEntityType, relatedEntityId } = parseResult.data;
+      
+      const formattedTo = formatPhoneNumber(to);
 
       const twilioClient = await getTwilioClient();
       const fromNumber = await getTwilioFromPhoneNumber();
@@ -1212,10 +1225,11 @@ export async function registerRoutes(
       });
 
       try {
+        console.log('Sending SMS to:', formattedTo, 'from:', fromNumber);
         const twilioMessage = await twilioClient.messages.create({
           body: message,
           from: fromNumber,
-          to,
+          to: formattedTo,
         });
 
         await storage.updateSMSLog(smsLog.id, {
