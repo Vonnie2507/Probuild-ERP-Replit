@@ -5,6 +5,14 @@ let connectionSettings: any;
 let twilioClientInstance: Twilio | null = null;
 let twilioPhoneNumber: string | null = null;
 
+// Clear cached client to force re-initialization with new credentials
+export function clearTwilioCache() {
+  twilioClientInstance = null;
+  twilioPhoneNumber = null;
+  connectionSettings = null;
+  console.log('Twilio cache cleared');
+}
+
 async function getCredentials() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY 
@@ -42,11 +50,11 @@ async function getCredentials() {
         const apiKeySecret = connectionSettings.settings.api_key_secret;
         const phoneNumber = connectionSettings.settings.phone_number || null;
         
-        console.log('Twilio credentials format check:');
-        console.log('  - account_sid format valid:', accountSid?.startsWith('AC') && accountSid?.length === 34);
-        console.log('  - api_key format valid:', apiKey?.startsWith('SK') && apiKey?.length === 34);
+        console.log('Twilio credentials check:');
+        console.log('  - account_sid present:', !!accountSid && accountSid.startsWith('AC'));
+        console.log('  - api_key present:', !!apiKey && apiKey.startsWith('SK'));
         console.log('  - api_key_secret present:', !!apiKeySecret && apiKeySecret.length > 0);
-        console.log('  - phone_number present:', !!phoneNumber);
+        console.log('  - phone_number:', phoneNumber);
         
         return {
           accountSid,
@@ -94,9 +102,13 @@ export async function getTwilioClient(): Promise<Twilio | null> {
   if ('useAuthToken' in credentials && credentials.useAuthToken) {
     twilioClientInstance = twilio(credentials.accountSid, credentials.authToken);
   } else if ('apiKey' in credentials) {
+    // Use Australian regional endpoint for AU API keys
     twilioClientInstance = twilio(credentials.apiKey, credentials.apiKeySecret, {
-      accountSid: credentials.accountSid
+      accountSid: credentials.accountSid,
+      region: 'au1',
+      edge: 'sydney'
     });
+    console.log('Twilio client initialized with AU region (au1/sydney)');
   }
 
   twilioPhoneNumber = credentials.phoneNumber;
