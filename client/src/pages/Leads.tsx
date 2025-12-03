@@ -32,7 +32,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Filter, LayoutGrid, List, Download, Phone, Mail, MapPin, FileText, Edit, Trash2, X } from "lucide-react";
+import { Plus, Search, Filter, LayoutGrid, List, Download, Phone, Mail, MapPin, FileText, Edit, Trash2, X, ChevronRight, Calendar, DollarSign, Send, Check, Clock } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,10 +70,13 @@ export default function Leads() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isQuoteBuilderOpen, setIsQuoteBuilderOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [isQuoteSheetOpen, setIsQuoteSheetOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [leadToDelete, setLeadToDelete] = useState<KanbanLead | null>(null);
   const [selectedLeadForQuote, setSelectedLeadForQuote] = useState<Lead | null>(null);
+  const [isEditingQuote, setIsEditingQuote] = useState(false);
   const [formData, setFormData] = useState({
     clientName: "",
     phone: "",
@@ -158,6 +162,31 @@ export default function Leads() {
       toast({
         title: "Error",
         description: "Failed to delete lead",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateQuoteMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      return apiRequest("PATCH", `/api/quotes/${id}`, data);
+    },
+    onSuccess: async (_result, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      const updatedQuotes = queryClient.getQueryData<Quote[]>(["/api/quotes"]);
+      const updated = updatedQuotes?.find(q => q.id === variables.id);
+      if (updated) {
+        setSelectedQuote(updated);
+      }
+      toast({
+        title: "Quote Updated",
+        description: "Quote has been updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update quote",
         variant: "destructive",
       });
     },
@@ -757,32 +786,35 @@ export default function Leads() {
                               key={quote.id}
                               className="flex items-center justify-between p-3 border rounded-lg hover-elevate cursor-pointer"
                               onClick={() => {
-                                toast({
-                                  title: "Quote Selected",
-                                  description: `Quote ${quote.quoteNumber} - ${formatCurrency(quote.totalAmount)}`,
-                                });
+                                setSelectedQuote(quote);
+                                setIsQuoteSheetOpen(true);
                               }}
                               data-testid={`quote-item-${quote.id}`}
                             >
-                              <div>
-                                <div className="font-medium">{quote.quoteNumber}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {formatCurrency(quote.totalAmount)}
+                              <div className="flex items-center gap-3">
+                                <div>
+                                  <div className="font-medium">{quote.quoteNumber}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {formatCurrency(quote.totalAmount)}
+                                  </div>
                                 </div>
                               </div>
-                              <Badge
-                                variant={
-                                  quote.status === "approved"
-                                    ? "default"
-                                    : quote.status === "sent"
-                                    ? "secondary"
-                                    : quote.status === "declined"
-                                    ? "destructive"
-                                    : "outline"
-                                }
-                              >
-                                {quote.status}
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant={
+                                    quote.status === "approved"
+                                      ? "default"
+                                      : quote.status === "sent"
+                                      ? "secondary"
+                                      : quote.status === "declined"
+                                      ? "destructive"
+                                      : "outline"
+                                  }
+                                >
+                                  {quote.status}
+                                </Badge>
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -795,6 +827,241 @@ export default function Leads() {
           )}
         </DialogContent>
       </Dialog>
+
+      <Sheet open={isQuoteSheetOpen} onOpenChange={setIsQuoteSheetOpen}>
+        <SheetContent className="sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              Quote {selectedQuote?.quoteNumber}
+              {selectedQuote && (
+                <Badge
+                  variant={
+                    selectedQuote.status === "approved"
+                      ? "default"
+                      : selectedQuote.status === "sent"
+                      ? "secondary"
+                      : selectedQuote.status === "declined"
+                      ? "destructive"
+                      : "outline"
+                  }
+                >
+                  {selectedQuote.status}
+                </Badge>
+              )}
+            </SheetTitle>
+            <SheetDescription>
+              View and manage quote details
+            </SheetDescription>
+          </SheetHeader>
+
+          {selectedQuote && (
+            <div className="mt-6 space-y-6">
+              <div className="flex gap-2">
+                {selectedQuote.status === "draft" && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      updateQuoteMutation.mutate({
+                        id: selectedQuote.id,
+                        data: { status: "sent", sentAt: new Date().toISOString() },
+                      });
+                    }}
+                    disabled={updateQuoteMutation.isPending}
+                    data-testid="button-send-quote"
+                  >
+                    <Send className="h-4 w-4 mr-1" />
+                    Send Quote
+                  </Button>
+                )}
+                {selectedQuote.status === "sent" && (
+                  <>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        updateQuoteMutation.mutate({
+                          id: selectedQuote.id,
+                          data: { status: "approved", approvedAt: new Date().toISOString() },
+                        });
+                      }}
+                      disabled={updateQuoteMutation.isPending}
+                      data-testid="button-approve-quote"
+                    >
+                      <Check className="h-4 w-4 mr-1" />
+                      Mark Approved
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        updateQuoteMutation.mutate({
+                          id: selectedQuote.id,
+                          data: { status: "declined" },
+                        });
+                      }}
+                      disabled={updateQuoteMutation.isPending}
+                      data-testid="button-decline-quote"
+                    >
+                      Declined
+                    </Button>
+                  </>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedLeadForQuote(selectedLead);
+                    setIsQuoteSheetOpen(false);
+                    setIsDetailDialogOpen(false);
+                    setIsQuoteBuilderOpen(true);
+                  }}
+                  data-testid="button-edit-quote"
+                >
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit Quote
+                </Button>
+              </div>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" />
+                    Pricing Summary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Materials:</span>
+                      <div className="font-medium">{formatCurrency(selectedQuote.materialsSubtotal)}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Labour:</span>
+                      <div className="font-medium">{formatCurrency(selectedQuote.labourEstimate)}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Total:</span>
+                      <div className="font-semibold text-lg">{formatCurrency(selectedQuote.totalAmount)}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Deposit ({selectedQuote.depositPercent}%):</span>
+                      <div className="font-medium">{formatCurrency(selectedQuote.depositRequired)}</div>
+                    </div>
+                  </div>
+                  {selectedQuote.isTradeQuote && (
+                    <div className="pt-2 flex items-center gap-2">
+                      <Badge variant="secondary">Trade Quote</Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {selectedQuote.tradeDiscount}% discount applied
+                      </span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Project Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Fence Height:</span>
+                      <div className="font-medium">{selectedQuote.fenceHeight}mm</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Total Length:</span>
+                      <div className="font-medium">{selectedQuote.totalLength}m</div>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Site Address:</span>
+                    <div className="font-medium">{selectedQuote.siteAddress}</div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {selectedQuote.lineItems && Array.isArray(selectedQuote.lineItems) && selectedQuote.lineItems.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Line Items</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {(selectedQuote.lineItems as any[]).map((item, index) => (
+                        <div key={index} className="flex justify-between text-sm py-2 border-b last:border-0">
+                          <div>
+                            <div className="font-medium">{item.productName || "Product"}</div>
+                            <div className="text-muted-foreground">Qty: {item.quantity} x {formatCurrency(item.unitPrice)}</div>
+                          </div>
+                          <div className="font-medium">{formatCurrency(item.totalPrice)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Timeline
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Created:</span>
+                    <span>{new Date(selectedQuote.createdAt).toLocaleDateString("en-AU")}</span>
+                  </div>
+                  {selectedQuote.sentAt && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Sent:</span>
+                      <span>{new Date(selectedQuote.sentAt).toLocaleDateString("en-AU")}</span>
+                    </div>
+                  )}
+                  {selectedQuote.approvedAt && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Approved:</span>
+                      <span>{new Date(selectedQuote.approvedAt).toLocaleDateString("en-AU")}</span>
+                    </div>
+                  )}
+                  {selectedQuote.validUntil && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Valid Until:</span>
+                      <span>{new Date(selectedQuote.validUntil).toLocaleDateString("en-AU")}</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {(selectedQuote.notes || selectedQuote.internalNotes) && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Notes</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {selectedQuote.notes && (
+                      <div>
+                        <span className="text-sm text-muted-foreground">Customer Notes:</span>
+                        <p className="mt-1">{selectedQuote.notes}</p>
+                      </div>
+                    )}
+                    {selectedQuote.internalNotes && (
+                      <div>
+                        <span className="text-sm text-muted-foreground">Internal Notes:</span>
+                        <p className="mt-1">{selectedQuote.internalNotes}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
