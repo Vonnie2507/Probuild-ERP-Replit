@@ -87,9 +87,11 @@ The system uses a hierarchical numbering format that links leads, quotes, jobs, 
 - **Invoices**: One per job, derived from lead number with `-INV` suffix `PVC-XXX-INV` (e.g., PVC-001-INV)
 
 Each lead can have multiple quotes, but only one job and one invoice per job. The numbering is auto-generated:
-- `createLead()`: Generates next sequential lead number (PVC-001, PVC-002, etc.)
-- `createQuote()`: Counts existing quotes for the lead and generates next sequence (Q1, Q2, etc.)
+- `createLead()`: Uses SQL MAX on numeric suffix to generate next sequential lead number (PVC-001, PVC-002, etc.) - handles gaps from deletions
+- `createQuote()`: Uses SQL MAX sequence query on quotes matching lead prefix to generate next sequence (Q1, Q2, etc.) - prevents number reuse
 - `createJob()`: Generates job number and invoice number from the lead's number
+
+The numbering logic uses integer-based MAX calculations instead of lexicographic sorting to ensure correct sequencing beyond PVC-999.
 
 ## Recent Changes (December 2025)
 - **Hierarchical Numbering System** (NEW): Implemented linked numbering for leads, quotes, jobs, and invoices
