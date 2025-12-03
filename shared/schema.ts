@@ -160,6 +160,7 @@ export const clients = pgTable("clients", {
 // Leads table
 export const leads = pgTable("leads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadNumber: text("lead_number").notNull().unique(),
   clientId: varchar("client_id").references(() => clients.id),
   source: leadSourceEnum("source").notNull().default("website"),
   leadType: clientTypeEnum("lead_type").notNull().default("public"),
@@ -248,7 +249,9 @@ export type QuoteLineItem = {
 export const jobs = pgTable("jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobNumber: text("job_number").notNull().unique(),
+  invoiceNumber: text("invoice_number").unique(),
   clientId: varchar("client_id").references(() => clients.id).notNull(),
+  leadId: varchar("lead_id").references(() => leads.id),
   quoteId: varchar("quote_id").references(() => quotes.id).notNull(),
   jobType: jobTypeEnum("job_type").notNull().default("supply_install"),
   siteAddress: text("site_address").notNull(),
