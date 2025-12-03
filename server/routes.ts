@@ -10,16 +10,12 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import Stripe from "stripe";
-import twilio from "twilio";
+import { getTwilioClient, getTwilioFromPhoneNumber } from "./twilio";
 
 const stripe = process.env.STRIPE_SECRET_KEY 
   ? new Stripe(process.env.STRIPE_SECRET_KEY, {
       apiVersion: "2025-04-30.basil" as any,
     })
-  : null;
-
-const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
-  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
   : null;
 
 export async function registerRoutes(
@@ -1055,11 +1051,26 @@ export async function registerRoutes(
   });
 
   // ============ TWILIO SMS ============
+  const smsSendSchema = z.object({
+    to: z.string().min(1, "Phone number is required"),
+    message: z.string().min(1, "Message is required"),
+    recipientName: z.string().optional(),
+    relatedEntityType: z.string().optional(),
+    relatedEntityId: z.string().optional(),
+  });
+
   app.post("/api/sms/send", async (req, res) => {
     try {
-      const { to, message, recipientName, relatedEntityType, relatedEntityId } = req.body;
+      const parseResult = smsSendSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: parseResult.error.errors[0].message });
+      }
+      const { to, message, recipientName, relatedEntityType, relatedEntityId } = parseResult.data;
 
-      if (!twilioClient) {
+      const twilioClient = await getTwilioClient();
+      const fromNumber = await getTwilioFromPhoneNumber();
+
+      if (!twilioClient || !fromNumber) {
         return res.status(503).json({ error: "SMS service not configured" });
       }
 
@@ -1068,6 +1079,7 @@ export async function registerRoutes(
         recipientName,
         message,
         status: "pending",
+        isOutbound: true,
         relatedEntityType,
         relatedEntityId,
       });
@@ -1075,7 +1087,7 @@ export async function registerRoutes(
       try {
         const twilioMessage = await twilioClient.messages.create({
           body: message,
-          from: process.env.TWILIO_PHONE_NUMBER,
+          from: fromNumber,
           to,
         });
 
@@ -1085,7 +1097,7 @@ export async function registerRoutes(
           sentAt: new Date(),
         });
 
-        res.json({ success: true, messageSid: twilioMessage.sid });
+        res.json({ success: true, messageSid: twilioMessage.sid, smsLog: { ...smsLog, status: "sent", sentAt: new Date() } });
       } catch (twilioError: any) {
         await storage.updateSMSLog(smsLog.id, {
           status: "failed",
@@ -1145,6 +1157,189 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error sending install reminder:", error);
       res.status(500).json({ error: "Failed to send install reminder" });
+    }
+  });
+
+  // Get all SMS logs
+  app.get("/api/sms/logs", async (req, res) => {
+    try {
+      const logs = await storage.getSMSLogs();
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching SMS logs:", error);
+      res.status(500).json({ error: "Failed to fetch SMS logs" });
+    }
+  });
+
+  // Get SMS conversation by phone
+  app.get("/api/sms/conversation/:phone", async (req, res) => {
+    try {
+      const { phone } = req.params;
+      const messages = await storage.getSMSLogsByPhone(phone);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching SMS conversation:", error);
+      res.status(500).json({ error: "Failed to fetch conversation" });
+    }
+  });
+
+  // Get SMS logs by related entity (client, job, quote)
+  app.get("/api/sms/entity/:entityType/:entityId", async (req, res) => {
+    try {
+      const { entityType, entityId } = req.params;
+      const messages = await storage.getSMSLogsByEntity(entityType, entityId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching SMS logs by entity:", error);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  const smsQuoteReadySchema = z.object({
+    quoteId: z.string().min(1, "Quote ID is required"),
+  });
+
+  // Send quote notification
+  app.post("/api/sms/quote-ready", async (req, res) => {
+    try {
+      const parseResult = smsQuoteReadySchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: parseResult.error.errors[0].message });
+      }
+      const { quoteId } = parseResult.data;
+
+      const quote = await storage.getQuote(quoteId);
+      if (!quote) {
+        return res.status(404).json({ error: "Quote not found" });
+      }
+
+      const client = await storage.getClient(quote.clientId);
+      if (!client || !client.phone) {
+        return res.status(400).json({ error: "Client phone not found" });
+      }
+
+      const twilioClient = await getTwilioClient();
+      const fromNumber = await getTwilioFromPhoneNumber();
+
+      if (!twilioClient || !fromNumber) {
+        return res.status(503).json({ error: "SMS service not configured" });
+      }
+
+      const formattedAmount = parseFloat(quote.totalAmount || "0").toLocaleString("en-AU", { 
+        style: "currency", 
+        currency: "AUD" 
+      });
+
+      const message = `Hi ${client.name}, your quote ${quote.quoteNumber} from Probuild PVC is ready for review. Total: ${formattedAmount}. Please contact us to discuss. Thank you!`;
+
+      const smsLog = await storage.createSMSLog({
+        recipientPhone: client.phone,
+        recipientName: client.name,
+        message,
+        status: "pending",
+        isOutbound: true,
+        relatedEntityType: "quote",
+        relatedEntityId: quoteId,
+      });
+
+      try {
+        const twilioMessage = await twilioClient.messages.create({
+          body: message,
+          from: fromNumber,
+          to: client.phone,
+        });
+
+        await storage.updateSMSLog(smsLog.id, {
+          twilioMessageSid: twilioMessage.sid,
+          status: "sent",
+          sentAt: new Date(),
+        });
+
+        res.json({ success: true, messageSid: twilioMessage.sid });
+      } catch (twilioError: any) {
+        await storage.updateSMSLog(smsLog.id, {
+          status: "failed",
+          errorMessage: twilioError.message,
+        });
+        throw twilioError;
+      }
+    } catch (error: any) {
+      console.error("Error sending quote notification:", error);
+      res.status(500).json({ error: error.message || "Failed to send notification" });
+    }
+  });
+
+  const smsPaymentReceivedSchema = z.object({
+    paymentId: z.string().min(1, "Payment ID is required"),
+  });
+
+  // Send payment received confirmation
+  app.post("/api/sms/payment-received", async (req, res) => {
+    try {
+      const parseResult = smsPaymentReceivedSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: parseResult.error.errors[0].message });
+      }
+      const { paymentId } = parseResult.data;
+
+      const payment = await storage.getPayment(paymentId);
+      if (!payment) {
+        return res.status(404).json({ error: "Payment not found" });
+      }
+
+      const client = await storage.getClient(payment.clientId);
+      if (!client || !client.phone) {
+        return res.status(400).json({ error: "Client phone not found" });
+      }
+
+      const twilioClient = await getTwilioClient();
+      const fromNumber = await getTwilioFromPhoneNumber();
+
+      if (!twilioClient || !fromNumber) {
+        return res.status(503).json({ error: "SMS service not configured" });
+      }
+
+      const formattedAmount = parseFloat(payment.amount).toLocaleString("en-AU", { 
+        style: "currency", 
+        currency: "AUD" 
+      });
+
+      const message = `Hi ${client.name}, thank you for your payment of ${formattedAmount}. Invoice: ${payment.invoiceNumber || "N/A"}. Probuild PVC appreciates your business!`;
+
+      const smsLog = await storage.createSMSLog({
+        recipientPhone: client.phone,
+        recipientName: client.name,
+        message,
+        status: "pending",
+        isOutbound: true,
+        relatedEntityType: "payment",
+        relatedEntityId: paymentId,
+      });
+
+      try {
+        const twilioMessage = await twilioClient.messages.create({
+          body: message,
+          from: fromNumber,
+          to: client.phone,
+        });
+
+        await storage.updateSMSLog(smsLog.id, {
+          twilioMessageSid: twilioMessage.sid,
+          status: "sent",
+          sentAt: new Date(),
+        });
+
+        res.json({ success: true, messageSid: twilioMessage.sid });
+      } catch (twilioError: any) {
+        await storage.updateSMSLog(smsLog.id, {
+          status: "failed",
+          errorMessage: twilioError.message,
+        });
+        throw twilioError;
+      }
+    } catch (error: any) {
+      console.error("Error sending payment confirmation:", error);
+      res.status(500).json({ error: error.message || "Failed to send confirmation" });
     }
   });
 

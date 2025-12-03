@@ -397,6 +397,7 @@ export const smsLogs = pgTable("sms_logs", {
   message: text("message").notNull(),
   twilioMessageSid: text("twilio_message_sid"),
   status: text("status").notNull().default("pending"),
+  isOutbound: boolean("is_outbound").notNull().default(true),
   relatedEntityType: text("related_entity_type"),
   relatedEntityId: varchar("related_entity_id"),
   sentAt: timestamp("sent_at"),

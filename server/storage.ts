@@ -146,6 +146,8 @@ export interface IStorage {
   // SMS Logs
   getSMSLog(id: string): Promise<SMSLog | undefined>;
   getSMSLogs(): Promise<SMSLog[]>;
+  getSMSLogsByPhone(phone: string): Promise<SMSLog[]>;
+  getSMSLogsByEntity(entityType: string, entityId: string): Promise<SMSLog[]>;
   createSMSLog(log: InsertSMSLog): Promise<SMSLog>;
   updateSMSLog(id: string, log: Partial<InsertSMSLog>): Promise<SMSLog | undefined>;
 
@@ -699,6 +701,22 @@ export class DatabaseStorage implements IStorage {
 
   async getSMSLogs(): Promise<SMSLog[]> {
     return db.select().from(smsLogs).orderBy(desc(smsLogs.createdAt));
+  }
+
+  async getSMSLogsByPhone(phone: string): Promise<SMSLog[]> {
+    const normalizedPhone = phone.replace(/\D/g, '');
+    return db.select().from(smsLogs)
+      .where(sql`regexp_replace(${smsLogs.recipientPhone}, '[^0-9]', '', 'g') LIKE '%' || ${normalizedPhone} || '%'`)
+      .orderBy(smsLogs.createdAt);
+  }
+
+  async getSMSLogsByEntity(entityType: string, entityId: string): Promise<SMSLog[]> {
+    return db.select().from(smsLogs)
+      .where(and(
+        eq(smsLogs.relatedEntityType, entityType),
+        eq(smsLogs.relatedEntityId, entityId)
+      ))
+      .orderBy(smsLogs.createdAt);
   }
 
   async createSMSLog(log: InsertSMSLog): Promise<SMSLog> {

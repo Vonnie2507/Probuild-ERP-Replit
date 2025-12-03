@@ -8,6 +8,7 @@ import {
   Calendar,
   Package,
   CreditCard,
+  MessageSquare,
   Wrench,
   Building2,
   Settings,
@@ -42,6 +43,7 @@ const operationsItems = [
 
 const financeItems = [
   { title: "Payments", url: "/payments", icon: CreditCard },
+  { title: "Messages", url: "/messages", icon: MessageSquare },
 ];
 
 const installerItems = [

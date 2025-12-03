@@ -16,6 +16,7 @@ import Production from "@/pages/Production";
 import Schedule from "@/pages/Schedule";
 import Inventory from "@/pages/Inventory";
 import Payments from "@/pages/Payments";
+import Messages from "@/pages/Messages";
 import Installer from "@/pages/Installer";
 import Trade from "@/pages/Trade";
 import NotFound from "@/pages/not-found";
@@ -90,6 +91,11 @@ function Router() {
       <Route path="/payments">
         <MainLayout>
           <Payments />
+        </MainLayout>
+      </Route>
+      <Route path="/messages">
+        <MainLayout>
+          <Messages />
         </MainLayout>
       </Route>
       <Route path="/installer">
