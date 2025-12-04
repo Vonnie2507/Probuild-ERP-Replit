@@ -17,6 +17,11 @@ import {
   LogOut,
   BarChart3,
   Zap,
+  Building,
+  GitBranch,
+  Shield,
+  FolderOpen,
+  BookOpen,
 } from "lucide-react";
 import {
   Sidebar,
@@ -63,6 +68,14 @@ const installerItems = [
 
 const tradeItems = [
   { title: "Trade Portal", url: "/trade", icon: Building2 },
+];
+
+const organisationItems = [
+  { title: "Departments", url: "/organisation/departments", icon: Building },
+  { title: "Workflows & SOPs", url: "/organisation/workflows", icon: GitBranch },
+  { title: "Policies", url: "/organisation/policies", icon: Shield },
+  { title: "Resources", url: "/organisation/resources", icon: FolderOpen },
+  { title: "Knowledge Base", url: "/organisation/knowledge", icon: BookOpen },
 ];
 
 export function AppSidebar() {
@@ -200,6 +213,24 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {tradeItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Organisation</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {organisationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)}>
                     <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>

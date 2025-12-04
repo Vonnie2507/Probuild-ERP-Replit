@@ -983,3 +983,362 @@ export type QuoteGroundCondition = typeof quoteGroundConditions.$inferSelect;
 
 export type InsertQuotePLSummary = z.infer<typeof insertQuotePLSummarySchema>;
 export type QuotePLSummary = typeof quotePLSummary.$inferSelect;
+
+// ============================================
+// ORGANISATION HUB MODULE
+// ============================================
+
+// Organisation Hub Enums
+export const orgContentStatusEnum = pgEnum("org_content_status", ["active", "draft", "archived"]);
+export const workflowCategoryEnum = pgEnum("workflow_category", ["sales", "production", "install", "warehouse", "admin", "hr", "safety", "other"]);
+export const policyCategoryEnum = pgEnum("policy_category", ["safety", "hr", "warehouse", "vehicles", "equipment", "operations", "other"]);
+export const hrFormTypeEnum = pgEnum("hr_form_type", ["incident_report", "leave_request", "training_request", "other"]);
+export const hrFormStatusEnum = pgEnum("hr_form_status", ["open", "under_review", "approved", "rejected", "closed"]);
+export const employmentTypeEnum = pgEnum("employment_type", ["full_time", "part_time", "casual", "contractor"]);
+export const documentTypeEnum = pgEnum("document_type", ["contract", "license", "certificate", "other"]);
+export const onboardingStatusEnum = pgEnum("onboarding_status", ["not_started", "in_progress", "complete"]);
+export const sessionStatusEnum = pgEnum("session_status", ["scheduled", "completed", "cancelled"]);
+export const noteVisibilityEnum = pgEnum("note_visibility", ["shared_with_employee", "manager_only", "hr_only"]);
+export const actionItemStatusEnum = pgEnum("action_item_status", ["open", "in_progress", "done"]);
+export const mediaEntityTypeEnum = pgEnum("media_entity_type", ["one_on_one_session", "hr_form", "workflow", "policy", "other"]);
+export const mediaFileTypeEnum = pgEnum("media_file_type", ["audio", "video", "image", "pdf", "other"]);
+export const diagramTypeEnum = pgEnum("diagram_type", ["uploaded_image", "embedded_tool", "json_flow"]);
+export const resourceTypeEnum = pgEnum("resource_type", ["file", "link"]);
+export const knowledgeSourceTypeEnum = pgEnum("knowledge_source_type", ["manual", "imported_from_workflow", "imported_from_policy", "external"]);
+
+// Departments table - organisational structure
+export const departments = pgTable("departments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  managerUserId: varchar("manager_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Workflows table - standard operating procedures
+export const workflows = pgTable("workflows", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  departmentId: varchar("department_id").references(() => departments.id),
+  category: workflowCategoryEnum("category").notNull(),
+  status: orgContentStatusEnum("status").notNull().default("draft"),
+  currentVersionId: varchar("current_version_id"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Workflow versions - version history for workflows
+export const workflowVersions = pgTable("workflow_versions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workflowId: varchar("workflow_id").references(() => workflows.id).notNull(),
+  versionNumber: integer("version_number").notNull(),
+  contentMarkdown: text("content_markdown"),
+  jsonSteps: jsonb("json_steps"),
+  changeSummary: text("change_summary"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  isPublished: boolean("is_published").notNull().default(false),
+});
+
+// Policies table - company policies
+export const policies = pgTable("policies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  category: policyCategoryEnum("category").notNull(),
+  departmentId: varchar("department_id").references(() => departments.id),
+  status: orgContentStatusEnum("status").notNull().default("draft"),
+  currentVersionId: varchar("current_version_id"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Policy versions - version history for policies
+export const policyVersions = pgTable("policy_versions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  policyId: varchar("policy_id").references(() => policies.id).notNull(),
+  versionNumber: integer("version_number").notNull(),
+  contentMarkdown: text("content_markdown"),
+  fileUrl: text("file_url"),
+  changeSummary: text("change_summary"),
+  effectiveFrom: timestamp("effective_from"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  isPublished: boolean("is_published").notNull().default(false),
+});
+
+// Policy acknowledgements - track who has read/acknowledged policies
+export const policyAcknowledgements = pgTable("policy_acknowledgements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  policyId: varchar("policy_id").references(() => policies.id).notNull(),
+  policyVersionId: varchar("policy_version_id").references(() => policyVersions.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  acknowledgedAt: timestamp("acknowledged_at").notNull().defaultNow(),
+});
+
+// Knowledge articles - internal how-to content
+export const knowledgeArticles = pgTable("knowledge_articles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  slug: text("slug").notNull(),
+  contentMarkdown: text("content_markdown"),
+  departmentId: varchar("department_id").references(() => departments.id),
+  tags: jsonb("tags"),
+  sourceType: knowledgeSourceTypeEnum("source_type").notNull().default("manual"),
+  relatedWorkflowId: varchar("related_workflow_id").references(() => workflows.id),
+  relatedPolicyId: varchar("related_policy_id").references(() => policies.id),
+  isPublished: boolean("is_published").notNull().default(false),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// HR Forms - generic form submissions
+export const hrForms = pgTable("hr_forms", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: hrFormTypeEnum("type").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: hrFormStatusEnum("status").notNull().default("open"),
+  submittedByUserId: varchar("submitted_by_user_id").references(() => users.id).notNull(),
+  assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
+  departmentId: varchar("department_id").references(() => departments.id),
+  payloadJson: jsonb("payload_json"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Staff Records - HR profile for employees
+export const staffRecords = pgTable("staff_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  positionTitle: text("position_title"),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  employmentType: employmentTypeEnum("employment_type"),
+  managerUserId: varchar("manager_user_id").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Staff Documents - contracts, licenses, certificates
+export const staffDocuments = pgTable("staff_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  staffRecordId: varchar("staff_record_id").references(() => staffRecords.id).notNull(),
+  documentType: documentTypeEnum("document_type").notNull(),
+  title: text("title").notNull(),
+  fileUrl: text("file_url"),
+  issuedDate: timestamp("issued_date"),
+  expiryDate: timestamp("expiry_date"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Onboarding Checklists - templates for onboarding
+export const onboardingChecklists = pgTable("onboarding_checklists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  departmentId: varchar("department_id").references(() => departments.id),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Onboarding Tasks - tasks in a checklist template
+export const onboardingTasks = pgTable("onboarding_tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  onboardingChecklistId: varchar("onboarding_checklist_id").references(() => onboardingChecklists.id).notNull(),
+  taskOrder: integer("task_order").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  required: boolean("required").notNull().default(true),
+});
+
+// Onboarding Assignments - assign checklist to staff member
+export const onboardingAssignments = pgTable("onboarding_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  staffRecordId: varchar("staff_record_id").references(() => staffRecords.id).notNull(),
+  onboardingChecklistId: varchar("onboarding_checklist_id").references(() => onboardingChecklists.id).notNull(),
+  assignedDate: timestamp("assigned_date").notNull().defaultNow(),
+  completedDate: timestamp("completed_date"),
+  status: onboardingStatusEnum("status").notNull().default("not_started"),
+});
+
+// Onboarding Assignment Tasks - individual task completion
+export const onboardingAssignmentTasks = pgTable("onboarding_assignment_tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  onboardingAssignmentId: varchar("onboarding_assignment_id").references(() => onboardingAssignments.id).notNull(),
+  onboardingTaskId: varchar("onboarding_task_id").references(() => onboardingTasks.id).notNull(),
+  status: onboardingStatusEnum("status").notNull().default("not_started"),
+  completedAt: timestamp("completed_at"),
+  completedByUserId: varchar("completed_by_user_id").references(() => users.id),
+});
+
+// One-on-One Sessions - 1:1 meetings
+export const oneOnOneSessions = pgTable("one_on_one_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeUserId: varchar("employee_user_id").references(() => users.id).notNull(),
+  managerUserId: varchar("manager_user_id").references(() => users.id).notNull(),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  durationMinutes: integer("duration_minutes"),
+  location: text("location"),
+  status: sessionStatusEnum("status").notNull().default("scheduled"),
+  overallSummary: text("overall_summary"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// One-on-One Notes - notes from meetings
+export const oneOnOneNotes = pgTable("one_on_one_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").references(() => oneOnOneSessions.id).notNull(),
+  authorUserId: varchar("author_user_id").references(() => users.id).notNull(),
+  visibility: noteVisibilityEnum("visibility").notNull().default("shared_with_employee"),
+  noteText: text("note_text").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// One-on-One Action Items - action items from meetings
+export const oneOnOneActionItems = pgTable("one_on_one_action_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").references(() => oneOnOneSessions.id).notNull(),
+  description: text("description").notNull(),
+  assignedToUserId: varchar("assigned_to_user_id").references(() => users.id).notNull(),
+  dueDate: timestamp("due_date"),
+  status: actionItemStatusEnum("status").notNull().default("open"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+// Media Files - attachments for various entities
+export const orgMediaFiles = pgTable("org_media_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  entityType: mediaEntityTypeEnum("entity_type").notNull(),
+  entityId: varchar("entity_id").notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileName: text("file_name"),
+  fileType: mediaFileTypeEnum("file_type").notNull(),
+  uploadedByUserId: varchar("uploaded_by_user_id").references(() => users.id),
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+});
+
+// Visual Flows - process diagrams
+export const visualFlows = pgTable("visual_flows", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  departmentId: varchar("department_id").references(() => departments.id),
+  diagramType: diagramTypeEnum("diagram_type").notNull(),
+  fileUrl: text("file_url"),
+  jsonDefinition: jsonb("json_definition"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Resources - central resource library
+export const resources = pgTable("resources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  resourceType: resourceTypeEnum("resource_type").notNull(),
+  fileUrl: text("file_url"),
+  externalUrl: text("external_url"),
+  tags: jsonb("tags"),
+  departmentId: varchar("department_id").references(() => departments.id),
+  uploadedByUserId: varchar("uploaded_by_user_id").references(() => users.id),
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+});
+
+// ============================================
+// ORGANISATION HUB INSERT SCHEMAS
+// ============================================
+
+export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertWorkflowSchema = createInsertSchema(workflows).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertWorkflowVersionSchema = createInsertSchema(workflowVersions).omit({ id: true, createdAt: true });
+export const insertPolicySchema = createInsertSchema(policies).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPolicyVersionSchema = createInsertSchema(policyVersions).omit({ id: true, createdAt: true });
+export const insertPolicyAcknowledgementSchema = createInsertSchema(policyAcknowledgements).omit({ id: true, acknowledgedAt: true });
+export const insertKnowledgeArticleSchema = createInsertSchema(knowledgeArticles).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertHRFormSchema = createInsertSchema(hrForms).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertStaffRecordSchema = createInsertSchema(staffRecords).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertStaffDocumentSchema = createInsertSchema(staffDocuments).omit({ id: true, createdAt: true });
+export const insertOnboardingChecklistSchema = createInsertSchema(onboardingChecklists).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertOnboardingTaskSchema = createInsertSchema(onboardingTasks).omit({ id: true });
+export const insertOnboardingAssignmentSchema = createInsertSchema(onboardingAssignments).omit({ id: true, assignedDate: true });
+export const insertOnboardingAssignmentTaskSchema = createInsertSchema(onboardingAssignmentTasks).omit({ id: true });
+export const insertOneOnOneSessionSchema = createInsertSchema(oneOnOneSessions).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertOneOnOneNoteSchema = createInsertSchema(oneOnOneNotes).omit({ id: true, createdAt: true });
+export const insertOneOnOneActionItemSchema = createInsertSchema(oneOnOneActionItems).omit({ id: true, createdAt: true });
+export const insertOrgMediaFileSchema = createInsertSchema(orgMediaFiles).omit({ id: true, uploadedAt: true });
+export const insertVisualFlowSchema = createInsertSchema(visualFlows).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertResourceSchema = createInsertSchema(resources).omit({ id: true, uploadedAt: true });
+
+// ============================================
+// ORGANISATION HUB TYPES
+// ============================================
+
+export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
+export type Department = typeof departments.$inferSelect;
+
+export type InsertWorkflow = z.infer<typeof insertWorkflowSchema>;
+export type Workflow = typeof workflows.$inferSelect;
+
+export type InsertWorkflowVersion = z.infer<typeof insertWorkflowVersionSchema>;
+export type WorkflowVersion = typeof workflowVersions.$inferSelect;
+
+export type InsertPolicy = z.infer<typeof insertPolicySchema>;
+export type Policy = typeof policies.$inferSelect;
+
+export type InsertPolicyVersion = z.infer<typeof insertPolicyVersionSchema>;
+export type PolicyVersion = typeof policyVersions.$inferSelect;
+
+export type InsertPolicyAcknowledgement = z.infer<typeof insertPolicyAcknowledgementSchema>;
+export type PolicyAcknowledgement = typeof policyAcknowledgements.$inferSelect;
+
+export type InsertKnowledgeArticle = z.infer<typeof insertKnowledgeArticleSchema>;
+export type KnowledgeArticle = typeof knowledgeArticles.$inferSelect;
+
+export type InsertHRForm = z.infer<typeof insertHRFormSchema>;
+export type HRForm = typeof hrForms.$inferSelect;
+
+export type InsertStaffRecord = z.infer<typeof insertStaffRecordSchema>;
+export type StaffRecord = typeof staffRecords.$inferSelect;
+
+export type InsertStaffDocument = z.infer<typeof insertStaffDocumentSchema>;
+export type StaffDocument = typeof staffDocuments.$inferSelect;
+
+export type InsertOnboardingChecklist = z.infer<typeof insertOnboardingChecklistSchema>;
+export type OnboardingChecklist = typeof onboardingChecklists.$inferSelect;
+
+export type InsertOnboardingTask = z.infer<typeof insertOnboardingTaskSchema>;
+export type OnboardingTask = typeof onboardingTasks.$inferSelect;
+
+export type InsertOnboardingAssignment = z.infer<typeof insertOnboardingAssignmentSchema>;
+export type OnboardingAssignment = typeof onboardingAssignments.$inferSelect;
+
+export type InsertOnboardingAssignmentTask = z.infer<typeof insertOnboardingAssignmentTaskSchema>;
+export type OnboardingAssignmentTask = typeof onboardingAssignmentTasks.$inferSelect;
+
+export type InsertOneOnOneSession = z.infer<typeof insertOneOnOneSessionSchema>;
+export type OneOnOneSession = typeof oneOnOneSessions.$inferSelect;
+
+export type InsertOneOnOneNote = z.infer<typeof insertOneOnOneNoteSchema>;
+export type OneOnOneNote = typeof oneOnOneNotes.$inferSelect;
+
+export type InsertOneOnOneActionItem = z.infer<typeof insertOneOnOneActionItemSchema>;
+export type OneOnOneActionItem = typeof oneOnOneActionItems.$inferSelect;
+
+export type InsertOrgMediaFile = z.infer<typeof insertOrgMediaFileSchema>;
+export type OrgMediaFile = typeof orgMediaFiles.$inferSelect;
+
+export type InsertVisualFlow = z.infer<typeof insertVisualFlowSchema>;
+export type VisualFlow = typeof visualFlows.$inferSelect;
+
+export type InsertResource = z.infer<typeof insertResourceSchema>;
+export type Resource = typeof resources.$inferSelect;

@@ -7,6 +7,8 @@ import {
   quoteFollowUps, automationCampaigns, campaignEnrollments,
   staffRateCards, quoteCostComponents, quoteTrips, quoteAdminTime,
   travelSessions, quoteGroundConditions, quotePLSummary,
+  departments, workflows, workflowVersions, policies, policyVersions,
+  policyAcknowledgements, resources, knowledgeArticles,
   type User, type InsertUser,
   type Client, type InsertClient,
   type Lead, type InsertLead,
@@ -35,6 +37,14 @@ import {
   type TravelSession, type InsertTravelSession,
   type QuoteGroundCondition, type InsertQuoteGroundCondition,
   type QuotePLSummary, type InsertQuotePLSummary,
+  type Department, type InsertDepartment,
+  type Workflow, type InsertWorkflow,
+  type WorkflowVersion, type InsertWorkflowVersion,
+  type Policy, type InsertPolicy,
+  type PolicyVersion, type InsertPolicyVersion,
+  type PolicyAcknowledgement, type InsertPolicyAcknowledgement,
+  type Resource, type InsertResource,
+  type KnowledgeArticle, type InsertKnowledgeArticle,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -292,6 +302,78 @@ export interface IStorage {
   createQuotePLSummary(summary: InsertQuotePLSummary): Promise<QuotePLSummary>;
   updateQuotePLSummary(id: string, summary: Partial<InsertQuotePLSummary>): Promise<QuotePLSummary | undefined>;
   recalculateQuotePLSummary(quoteId: string): Promise<QuotePLSummary | undefined>;
+
+  // ============================================
+  // ORGANISATION HUB
+  // ============================================
+
+  // Departments
+  getDepartment(id: string): Promise<Department | undefined>;
+  getDepartments(): Promise<Department[]>;
+  createDepartment(department: InsertDepartment): Promise<Department>;
+  updateDepartment(id: string, department: Partial<InsertDepartment>): Promise<Department | undefined>;
+  deleteDepartment(id: string): Promise<boolean>;
+
+  // Workflows
+  getWorkflow(id: string): Promise<Workflow | undefined>;
+  getWorkflows(): Promise<Workflow[]>;
+  getWorkflowsByDepartment(departmentId: string): Promise<Workflow[]>;
+  getWorkflowsByCategory(category: string): Promise<Workflow[]>;
+  getActiveWorkflows(): Promise<Workflow[]>;
+  createWorkflow(workflow: InsertWorkflow): Promise<Workflow>;
+  updateWorkflow(id: string, workflow: Partial<InsertWorkflow>): Promise<Workflow | undefined>;
+  deleteWorkflow(id: string): Promise<boolean>;
+
+  // Workflow Versions
+  getWorkflowVersion(id: string): Promise<WorkflowVersion | undefined>;
+  getWorkflowVersionsByWorkflow(workflowId: string): Promise<WorkflowVersion[]>;
+  getLatestWorkflowVersion(workflowId: string): Promise<WorkflowVersion | undefined>;
+  createWorkflowVersion(version: InsertWorkflowVersion): Promise<WorkflowVersion>;
+  updateWorkflowVersion(id: string, version: Partial<InsertWorkflowVersion>): Promise<WorkflowVersion | undefined>;
+
+  // Policies
+  getPolicy(id: string): Promise<Policy | undefined>;
+  getPolicies(): Promise<Policy[]>;
+  getPoliciesByDepartment(departmentId: string): Promise<Policy[]>;
+  getPoliciesByCategory(category: string): Promise<Policy[]>;
+  getActivePolicies(): Promise<Policy[]>;
+  createPolicy(policy: InsertPolicy): Promise<Policy>;
+  updatePolicy(id: string, policy: Partial<InsertPolicy>): Promise<Policy | undefined>;
+  deletePolicy(id: string): Promise<boolean>;
+
+  // Policy Versions
+  getPolicyVersion(id: string): Promise<PolicyVersion | undefined>;
+  getPolicyVersionsByPolicy(policyId: string): Promise<PolicyVersion[]>;
+  getLatestPolicyVersion(policyId: string): Promise<PolicyVersion | undefined>;
+  createPolicyVersion(version: InsertPolicyVersion): Promise<PolicyVersion>;
+  updatePolicyVersion(id: string, version: Partial<InsertPolicyVersion>): Promise<PolicyVersion | undefined>;
+
+  // Policy Acknowledgements
+  getPolicyAcknowledgement(id: string): Promise<PolicyAcknowledgement | undefined>;
+  getPolicyAcknowledgementsByPolicy(policyId: string): Promise<PolicyAcknowledgement[]>;
+  getPolicyAcknowledgementsByUser(userId: string): Promise<PolicyAcknowledgement[]>;
+  hasUserAcknowledgedPolicy(userId: string, policyVersionId: string): Promise<boolean>;
+  createPolicyAcknowledgement(acknowledgement: InsertPolicyAcknowledgement): Promise<PolicyAcknowledgement>;
+
+  // Resources
+  getResource(id: string): Promise<Resource | undefined>;
+  getResources(): Promise<Resource[]>;
+  getResourcesByDepartment(departmentId: string): Promise<Resource[]>;
+  searchResources(query: string): Promise<Resource[]>;
+  createResource(resource: InsertResource): Promise<Resource>;
+  updateResource(id: string, resource: Partial<InsertResource>): Promise<Resource | undefined>;
+  deleteResource(id: string): Promise<boolean>;
+
+  // Knowledge Articles
+  getKnowledgeArticle(id: string): Promise<KnowledgeArticle | undefined>;
+  getKnowledgeArticleBySlug(slug: string): Promise<KnowledgeArticle | undefined>;
+  getKnowledgeArticles(): Promise<KnowledgeArticle[]>;
+  getPublishedKnowledgeArticles(): Promise<KnowledgeArticle[]>;
+  getKnowledgeArticlesByDepartment(departmentId: string): Promise<KnowledgeArticle[]>;
+  searchKnowledgeArticles(query: string): Promise<KnowledgeArticle[]>;
+  createKnowledgeArticle(article: InsertKnowledgeArticle): Promise<KnowledgeArticle>;
+  updateKnowledgeArticle(id: string, article: Partial<InsertKnowledgeArticle>): Promise<KnowledgeArticle | undefined>;
+  deleteKnowledgeArticle(id: string): Promise<boolean>;
 }
 
 export interface DashboardStats {
@@ -1697,6 +1779,311 @@ export class DatabaseStorage implements IStorage {
     } else {
       return this.createQuotePLSummary(summaryData);
     }
+  }
+
+  // ============================================
+  // ORGANISATION HUB IMPLEMENTATIONS
+  // ============================================
+
+  // Departments
+  async getDepartment(id: string): Promise<Department | undefined> {
+    const [department] = await db.select().from(departments).where(eq(departments.id, id));
+    return department;
+  }
+
+  async getDepartments(): Promise<Department[]> {
+    return db.select().from(departments).orderBy(departments.name);
+  }
+
+  async createDepartment(department: InsertDepartment): Promise<Department> {
+    const [created] = await db.insert(departments).values(department).returning();
+    return created;
+  }
+
+  async updateDepartment(id: string, department: Partial<InsertDepartment>): Promise<Department | undefined> {
+    const [updated] = await db.update(departments)
+      .set({ ...department, updatedAt: new Date() })
+      .where(eq(departments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteDepartment(id: string): Promise<boolean> {
+    const result = await db.delete(departments).where(eq(departments.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Workflows
+  async getWorkflow(id: string): Promise<Workflow | undefined> {
+    const [workflow] = await db.select().from(workflows).where(eq(workflows.id, id));
+    return workflow;
+  }
+
+  async getWorkflows(): Promise<Workflow[]> {
+    return db.select().from(workflows).orderBy(desc(workflows.updatedAt));
+  }
+
+  async getWorkflowsByDepartment(departmentId: string): Promise<Workflow[]> {
+    return db.select().from(workflows).where(eq(workflows.departmentId, departmentId)).orderBy(workflows.title);
+  }
+
+  async getWorkflowsByCategory(category: string): Promise<Workflow[]> {
+    return db.select().from(workflows).where(eq(workflows.category, category as any)).orderBy(workflows.title);
+  }
+
+  async getActiveWorkflows(): Promise<Workflow[]> {
+    return db.select().from(workflows).where(eq(workflows.status, 'active')).orderBy(workflows.title);
+  }
+
+  async createWorkflow(workflow: InsertWorkflow): Promise<Workflow> {
+    const [created] = await db.insert(workflows).values(workflow).returning();
+    return created;
+  }
+
+  async updateWorkflow(id: string, workflow: Partial<InsertWorkflow>): Promise<Workflow | undefined> {
+    const [updated] = await db.update(workflows)
+      .set({ ...workflow, updatedAt: new Date() })
+      .where(eq(workflows.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteWorkflow(id: string): Promise<boolean> {
+    const result = await db.delete(workflows).where(eq(workflows.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Workflow Versions
+  async getWorkflowVersion(id: string): Promise<WorkflowVersion | undefined> {
+    const [version] = await db.select().from(workflowVersions).where(eq(workflowVersions.id, id));
+    return version;
+  }
+
+  async getWorkflowVersionsByWorkflow(workflowId: string): Promise<WorkflowVersion[]> {
+    return db.select().from(workflowVersions)
+      .where(eq(workflowVersions.workflowId, workflowId))
+      .orderBy(desc(workflowVersions.versionNumber));
+  }
+
+  async getLatestWorkflowVersion(workflowId: string): Promise<WorkflowVersion | undefined> {
+    const [version] = await db.select().from(workflowVersions)
+      .where(eq(workflowVersions.workflowId, workflowId))
+      .orderBy(desc(workflowVersions.versionNumber))
+      .limit(1);
+    return version;
+  }
+
+  async createWorkflowVersion(version: InsertWorkflowVersion): Promise<WorkflowVersion> {
+    const [created] = await db.insert(workflowVersions).values(version).returning();
+    return created;
+  }
+
+  async updateWorkflowVersion(id: string, version: Partial<InsertWorkflowVersion>): Promise<WorkflowVersion | undefined> {
+    const [updated] = await db.update(workflowVersions)
+      .set(version)
+      .where(eq(workflowVersions.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Policies
+  async getPolicy(id: string): Promise<Policy | undefined> {
+    const [policy] = await db.select().from(policies).where(eq(policies.id, id));
+    return policy;
+  }
+
+  async getPolicies(): Promise<Policy[]> {
+    return db.select().from(policies).orderBy(desc(policies.updatedAt));
+  }
+
+  async getPoliciesByDepartment(departmentId: string): Promise<Policy[]> {
+    return db.select().from(policies).where(eq(policies.departmentId, departmentId)).orderBy(policies.title);
+  }
+
+  async getPoliciesByCategory(category: string): Promise<Policy[]> {
+    return db.select().from(policies).where(eq(policies.category, category as any)).orderBy(policies.title);
+  }
+
+  async getActivePolicies(): Promise<Policy[]> {
+    return db.select().from(policies).where(eq(policies.status, 'active')).orderBy(policies.title);
+  }
+
+  async createPolicy(policy: InsertPolicy): Promise<Policy> {
+    const [created] = await db.insert(policies).values(policy).returning();
+    return created;
+  }
+
+  async updatePolicy(id: string, policy: Partial<InsertPolicy>): Promise<Policy | undefined> {
+    const [updated] = await db.update(policies)
+      .set({ ...policy, updatedAt: new Date() })
+      .where(eq(policies.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePolicy(id: string): Promise<boolean> {
+    const result = await db.delete(policies).where(eq(policies.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Policy Versions
+  async getPolicyVersion(id: string): Promise<PolicyVersion | undefined> {
+    const [version] = await db.select().from(policyVersions).where(eq(policyVersions.id, id));
+    return version;
+  }
+
+  async getPolicyVersionsByPolicy(policyId: string): Promise<PolicyVersion[]> {
+    return db.select().from(policyVersions)
+      .where(eq(policyVersions.policyId, policyId))
+      .orderBy(desc(policyVersions.versionNumber));
+  }
+
+  async getLatestPolicyVersion(policyId: string): Promise<PolicyVersion | undefined> {
+    const [version] = await db.select().from(policyVersions)
+      .where(eq(policyVersions.policyId, policyId))
+      .orderBy(desc(policyVersions.versionNumber))
+      .limit(1);
+    return version;
+  }
+
+  async createPolicyVersion(version: InsertPolicyVersion): Promise<PolicyVersion> {
+    const [created] = await db.insert(policyVersions).values(version).returning();
+    return created;
+  }
+
+  async updatePolicyVersion(id: string, version: Partial<InsertPolicyVersion>): Promise<PolicyVersion | undefined> {
+    const [updated] = await db.update(policyVersions)
+      .set(version)
+      .where(eq(policyVersions.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Policy Acknowledgements
+  async getPolicyAcknowledgement(id: string): Promise<PolicyAcknowledgement | undefined> {
+    const [ack] = await db.select().from(policyAcknowledgements).where(eq(policyAcknowledgements.id, id));
+    return ack;
+  }
+
+  async getPolicyAcknowledgementsByPolicy(policyId: string): Promise<PolicyAcknowledgement[]> {
+    return db.select().from(policyAcknowledgements)
+      .where(eq(policyAcknowledgements.policyId, policyId))
+      .orderBy(desc(policyAcknowledgements.acknowledgedAt));
+  }
+
+  async getPolicyAcknowledgementsByUser(userId: string): Promise<PolicyAcknowledgement[]> {
+    return db.select().from(policyAcknowledgements)
+      .where(eq(policyAcknowledgements.userId, userId))
+      .orderBy(desc(policyAcknowledgements.acknowledgedAt));
+  }
+
+  async hasUserAcknowledgedPolicy(userId: string, policyVersionId: string): Promise<boolean> {
+    const [ack] = await db.select().from(policyAcknowledgements)
+      .where(and(
+        eq(policyAcknowledgements.userId, userId),
+        eq(policyAcknowledgements.policyVersionId, policyVersionId)
+      ));
+    return !!ack;
+  }
+
+  async createPolicyAcknowledgement(acknowledgement: InsertPolicyAcknowledgement): Promise<PolicyAcknowledgement> {
+    const [created] = await db.insert(policyAcknowledgements).values(acknowledgement).returning();
+    return created;
+  }
+
+  // Resources
+  async getResource(id: string): Promise<Resource | undefined> {
+    const [resource] = await db.select().from(resources).where(eq(resources.id, id));
+    return resource;
+  }
+
+  async getResources(): Promise<Resource[]> {
+    return db.select().from(resources).orderBy(desc(resources.uploadedAt));
+  }
+
+  async getResourcesByDepartment(departmentId: string): Promise<Resource[]> {
+    return db.select().from(resources).where(eq(resources.departmentId, departmentId)).orderBy(resources.title);
+  }
+
+  async searchResources(query: string): Promise<Resource[]> {
+    return db.select().from(resources)
+      .where(or(
+        like(resources.title, `%${query}%`),
+        like(resources.description, `%${query}%`)
+      ))
+      .orderBy(desc(resources.uploadedAt));
+  }
+
+  async createResource(resource: InsertResource): Promise<Resource> {
+    const [created] = await db.insert(resources).values(resource).returning();
+    return created;
+  }
+
+  async updateResource(id: string, resource: Partial<InsertResource>): Promise<Resource | undefined> {
+    const [updated] = await db.update(resources)
+      .set(resource)
+      .where(eq(resources.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteResource(id: string): Promise<boolean> {
+    const result = await db.delete(resources).where(eq(resources.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Knowledge Articles
+  async getKnowledgeArticle(id: string): Promise<KnowledgeArticle | undefined> {
+    const [article] = await db.select().from(knowledgeArticles).where(eq(knowledgeArticles.id, id));
+    return article;
+  }
+
+  async getKnowledgeArticleBySlug(slug: string): Promise<KnowledgeArticle | undefined> {
+    const [article] = await db.select().from(knowledgeArticles).where(eq(knowledgeArticles.slug, slug));
+    return article;
+  }
+
+  async getKnowledgeArticles(): Promise<KnowledgeArticle[]> {
+    return db.select().from(knowledgeArticles).orderBy(desc(knowledgeArticles.updatedAt));
+  }
+
+  async getPublishedKnowledgeArticles(): Promise<KnowledgeArticle[]> {
+    return db.select().from(knowledgeArticles)
+      .where(eq(knowledgeArticles.isPublished, true))
+      .orderBy(knowledgeArticles.title);
+  }
+
+  async getKnowledgeArticlesByDepartment(departmentId: string): Promise<KnowledgeArticle[]> {
+    return db.select().from(knowledgeArticles)
+      .where(eq(knowledgeArticles.departmentId, departmentId))
+      .orderBy(knowledgeArticles.title);
+  }
+
+  async searchKnowledgeArticles(query: string): Promise<KnowledgeArticle[]> {
+    return db.select().from(knowledgeArticles)
+      .where(or(
+        like(knowledgeArticles.title, `%${query}%`),
+        like(knowledgeArticles.contentMarkdown, `%${query}%`)
+      ))
+      .orderBy(desc(knowledgeArticles.updatedAt));
+  }
+
+  async createKnowledgeArticle(article: InsertKnowledgeArticle): Promise<KnowledgeArticle> {
+    const [created] = await db.insert(knowledgeArticles).values(article).returning();
+    return created;
+  }
+
+  async updateKnowledgeArticle(id: string, article: Partial<InsertKnowledgeArticle>): Promise<KnowledgeArticle | undefined> {
+    const [updated] = await db.update(knowledgeArticles)
+      .set({ ...article, updatedAt: new Date() })
+      .where(eq(knowledgeArticles.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteKnowledgeArticle(id: string): Promise<boolean> {
+    const result = await db.delete(knowledgeArticles).where(eq(knowledgeArticles.id, id)).returning();
+    return result.length > 0;
   }
 }
 

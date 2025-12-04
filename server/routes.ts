@@ -7,7 +7,10 @@ import {
   insertProductionTaskSchema, insertInstallTaskSchema,
   insertScheduleEventSchema, insertPaymentSchema,
   insertFenceStyleSchema, insertNotificationSchema,
-  insertSMSConversationSchema, insertMessageRangeSchema
+  insertSMSConversationSchema, insertMessageRangeSchema,
+  insertDepartmentSchema, insertWorkflowSchema, insertWorkflowVersionSchema,
+  insertPolicySchema, insertPolicyVersionSchema, insertPolicyAcknowledgementSchema,
+  insertResourceSchema, insertKnowledgeArticleSchema
 } from "@shared/schema";
 import { z } from "zod";
 import Stripe from "stripe";
@@ -2683,6 +2686,548 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching job P&L summary:", error);
       res.status(500).json({ error: "Failed to fetch job P&L summary" });
+    }
+  });
+
+  // ============================================
+  // ORGANISATION HUB
+  // ============================================
+
+  // ============ DEPARTMENTS ============
+  app.get("/api/organisation/departments", async (req, res) => {
+    try {
+      const departments = await storage.getDepartments();
+      res.json(departments);
+    } catch (error) {
+      console.error("Error fetching departments:", error);
+      res.status(500).json({ error: "Failed to fetch departments" });
+    }
+  });
+
+  app.get("/api/organisation/departments/:id", async (req, res) => {
+    try {
+      const department = await storage.getDepartment(req.params.id);
+      if (!department) {
+        return res.status(404).json({ error: "Department not found" });
+      }
+      res.json(department);
+    } catch (error) {
+      console.error("Error fetching department:", error);
+      res.status(500).json({ error: "Failed to fetch department" });
+    }
+  });
+
+  app.post("/api/organisation/departments", async (req, res) => {
+    try {
+      const data = { ...req.body };
+      if (data.managerUserId === "") data.managerUserId = null;
+      const validatedData = insertDepartmentSchema.parse(data);
+      const department = await storage.createDepartment(validatedData);
+      res.status(201).json(department);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating department:", error);
+      res.status(500).json({ error: "Failed to create department" });
+    }
+  });
+
+  app.patch("/api/organisation/departments/:id", async (req, res) => {
+    try {
+      const data = { ...req.body };
+      if (data.managerUserId === "") data.managerUserId = null;
+      const validatedData = insertDepartmentSchema.partial().parse(data);
+      const department = await storage.updateDepartment(req.params.id, validatedData);
+      if (!department) {
+        return res.status(404).json({ error: "Department not found" });
+      }
+      res.json(department);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating department:", error);
+      res.status(500).json({ error: "Failed to update department" });
+    }
+  });
+
+  app.delete("/api/organisation/departments/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteDepartment(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Department not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting department:", error);
+      res.status(500).json({ error: "Failed to delete department" });
+    }
+  });
+
+  // ============ WORKFLOWS ============
+  app.get("/api/organisation/workflows", async (req, res) => {
+    try {
+      const { department, category, status } = req.query;
+      let workflowList;
+      if (department) {
+        workflowList = await storage.getWorkflowsByDepartment(department as string);
+      } else if (category) {
+        workflowList = await storage.getWorkflowsByCategory(category as string);
+      } else if (status === 'active') {
+        workflowList = await storage.getActiveWorkflows();
+      } else {
+        workflowList = await storage.getWorkflows();
+      }
+      res.json(workflowList);
+    } catch (error) {
+      console.error("Error fetching workflows:", error);
+      res.status(500).json({ error: "Failed to fetch workflows" });
+    }
+  });
+
+  app.get("/api/organisation/workflows/:id", async (req, res) => {
+    try {
+      const workflow = await storage.getWorkflow(req.params.id);
+      if (!workflow) {
+        return res.status(404).json({ error: "Workflow not found" });
+      }
+      res.json(workflow);
+    } catch (error) {
+      console.error("Error fetching workflow:", error);
+      res.status(500).json({ error: "Failed to fetch workflow" });
+    }
+  });
+
+  app.post("/api/organisation/workflows", async (req, res) => {
+    try {
+      const data = { ...req.body };
+      if (data.departmentId === "") data.departmentId = null;
+      const validatedData = insertWorkflowSchema.parse(data);
+      const workflow = await storage.createWorkflow(validatedData);
+      res.status(201).json(workflow);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating workflow:", error);
+      res.status(500).json({ error: "Failed to create workflow" });
+    }
+  });
+
+  app.patch("/api/organisation/workflows/:id", async (req, res) => {
+    try {
+      const data = { ...req.body };
+      if (data.departmentId === "") data.departmentId = null;
+      const validatedData = insertWorkflowSchema.partial().parse(data);
+      const workflow = await storage.updateWorkflow(req.params.id, validatedData);
+      if (!workflow) {
+        return res.status(404).json({ error: "Workflow not found" });
+      }
+      res.json(workflow);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating workflow:", error);
+      res.status(500).json({ error: "Failed to update workflow" });
+    }
+  });
+
+  app.delete("/api/organisation/workflows/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteWorkflow(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Workflow not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting workflow:", error);
+      res.status(500).json({ error: "Failed to delete workflow" });
+    }
+  });
+
+  // Workflow Versions
+  app.get("/api/organisation/workflows/:workflowId/versions", async (req, res) => {
+    try {
+      const versions = await storage.getWorkflowVersionsByWorkflow(req.params.workflowId);
+      res.json(versions);
+    } catch (error) {
+      console.error("Error fetching workflow versions:", error);
+      res.status(500).json({ error: "Failed to fetch workflow versions" });
+    }
+  });
+
+  app.get("/api/organisation/workflows/:workflowId/versions/latest", async (req, res) => {
+    try {
+      const version = await storage.getLatestWorkflowVersion(req.params.workflowId);
+      if (!version) {
+        return res.status(404).json({ error: "No versions found" });
+      }
+      res.json(version);
+    } catch (error) {
+      console.error("Error fetching latest workflow version:", error);
+      res.status(500).json({ error: "Failed to fetch latest version" });
+    }
+  });
+
+  app.post("/api/organisation/workflows/:workflowId/versions", async (req, res) => {
+    try {
+      const validatedData = insertWorkflowVersionSchema.parse({
+        ...req.body,
+        workflowId: req.params.workflowId
+      });
+      const version = await storage.createWorkflowVersion(validatedData);
+      res.status(201).json(version);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating workflow version:", error);
+      res.status(500).json({ error: "Failed to create workflow version" });
+    }
+  });
+
+  // ============ POLICIES ============
+  app.get("/api/organisation/policies", async (req, res) => {
+    try {
+      const { department, category, status } = req.query;
+      let policyList;
+      if (department) {
+        policyList = await storage.getPoliciesByDepartment(department as string);
+      } else if (category) {
+        policyList = await storage.getPoliciesByCategory(category as string);
+      } else if (status === 'active') {
+        policyList = await storage.getActivePolicies();
+      } else {
+        policyList = await storage.getPolicies();
+      }
+      res.json(policyList);
+    } catch (error) {
+      console.error("Error fetching policies:", error);
+      res.status(500).json({ error: "Failed to fetch policies" });
+    }
+  });
+
+  app.get("/api/organisation/policies/:id", async (req, res) => {
+    try {
+      const policy = await storage.getPolicy(req.params.id);
+      if (!policy) {
+        return res.status(404).json({ error: "Policy not found" });
+      }
+      res.json(policy);
+    } catch (error) {
+      console.error("Error fetching policy:", error);
+      res.status(500).json({ error: "Failed to fetch policy" });
+    }
+  });
+
+  app.post("/api/organisation/policies", async (req, res) => {
+    try {
+      const data = { ...req.body };
+      if (data.departmentId === "") data.departmentId = null;
+      const validatedData = insertPolicySchema.parse(data);
+      const policy = await storage.createPolicy(validatedData);
+      res.status(201).json(policy);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating policy:", error);
+      res.status(500).json({ error: "Failed to create policy" });
+    }
+  });
+
+  app.patch("/api/organisation/policies/:id", async (req, res) => {
+    try {
+      const data = { ...req.body };
+      if (data.departmentId === "") data.departmentId = null;
+      const validatedData = insertPolicySchema.partial().parse(data);
+      const policy = await storage.updatePolicy(req.params.id, validatedData);
+      if (!policy) {
+        return res.status(404).json({ error: "Policy not found" });
+      }
+      res.json(policy);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating policy:", error);
+      res.status(500).json({ error: "Failed to update policy" });
+    }
+  });
+
+  app.delete("/api/organisation/policies/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deletePolicy(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Policy not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting policy:", error);
+      res.status(500).json({ error: "Failed to delete policy" });
+    }
+  });
+
+  // Policy Versions
+  app.get("/api/organisation/policies/:policyId/versions", async (req, res) => {
+    try {
+      const versions = await storage.getPolicyVersionsByPolicy(req.params.policyId);
+      res.json(versions);
+    } catch (error) {
+      console.error("Error fetching policy versions:", error);
+      res.status(500).json({ error: "Failed to fetch policy versions" });
+    }
+  });
+
+  app.get("/api/organisation/policies/:policyId/versions/latest", async (req, res) => {
+    try {
+      const version = await storage.getLatestPolicyVersion(req.params.policyId);
+      if (!version) {
+        return res.status(404).json({ error: "No versions found" });
+      }
+      res.json(version);
+    } catch (error) {
+      console.error("Error fetching latest policy version:", error);
+      res.status(500).json({ error: "Failed to fetch latest version" });
+    }
+  });
+
+  app.post("/api/organisation/policies/:policyId/versions", async (req, res) => {
+    try {
+      const validatedData = insertPolicyVersionSchema.parse({
+        ...req.body,
+        policyId: req.params.policyId
+      });
+      const version = await storage.createPolicyVersion(validatedData);
+      res.status(201).json(version);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating policy version:", error);
+      res.status(500).json({ error: "Failed to create policy version" });
+    }
+  });
+
+  // Policy Acknowledgements
+  app.get("/api/organisation/policies/:policyId/acknowledgements", async (req, res) => {
+    try {
+      const acknowledgements = await storage.getPolicyAcknowledgementsByPolicy(req.params.policyId);
+      res.json(acknowledgements);
+    } catch (error) {
+      console.error("Error fetching acknowledgements:", error);
+      res.status(500).json({ error: "Failed to fetch acknowledgements" });
+    }
+  });
+
+  app.post("/api/organisation/policies/:policyId/acknowledge", async (req, res) => {
+    try {
+      const { userId, policyVersionId } = req.body;
+      if (!userId || !policyVersionId) {
+        return res.status(400).json({ error: "userId and policyVersionId are required" });
+      }
+      
+      const alreadyAcknowledged = await storage.hasUserAcknowledgedPolicy(userId, policyVersionId);
+      if (alreadyAcknowledged) {
+        return res.status(400).json({ error: "Policy already acknowledged" });
+      }
+      
+      const acknowledgement = await storage.createPolicyAcknowledgement({
+        policyId: req.params.policyId,
+        policyVersionId,
+        userId
+      });
+      res.status(201).json(acknowledgement);
+    } catch (error) {
+      console.error("Error creating acknowledgement:", error);
+      res.status(500).json({ error: "Failed to create acknowledgement" });
+    }
+  });
+
+  app.get("/api/organisation/users/:userId/acknowledgements", async (req, res) => {
+    try {
+      const acknowledgements = await storage.getPolicyAcknowledgementsByUser(req.params.userId);
+      res.json(acknowledgements);
+    } catch (error) {
+      console.error("Error fetching user acknowledgements:", error);
+      res.status(500).json({ error: "Failed to fetch user acknowledgements" });
+    }
+  });
+
+  // ============ RESOURCES ============
+  app.get("/api/organisation/resources", async (req, res) => {
+    try {
+      const { department, search } = req.query;
+      let resourceList;
+      if (search) {
+        resourceList = await storage.searchResources(search as string);
+      } else if (department) {
+        resourceList = await storage.getResourcesByDepartment(department as string);
+      } else {
+        resourceList = await storage.getResources();
+      }
+      res.json(resourceList);
+    } catch (error) {
+      console.error("Error fetching resources:", error);
+      res.status(500).json({ error: "Failed to fetch resources" });
+    }
+  });
+
+  app.get("/api/organisation/resources/:id", async (req, res) => {
+    try {
+      const resource = await storage.getResource(req.params.id);
+      if (!resource) {
+        return res.status(404).json({ error: "Resource not found" });
+      }
+      res.json(resource);
+    } catch (error) {
+      console.error("Error fetching resource:", error);
+      res.status(500).json({ error: "Failed to fetch resource" });
+    }
+  });
+
+  app.post("/api/organisation/resources", async (req, res) => {
+    try {
+      const data = { ...req.body };
+      if (data.departmentId === "") data.departmentId = null;
+      const validatedData = insertResourceSchema.parse(data);
+      const resource = await storage.createResource(validatedData);
+      res.status(201).json(resource);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating resource:", error);
+      res.status(500).json({ error: "Failed to create resource" });
+    }
+  });
+
+  app.patch("/api/organisation/resources/:id", async (req, res) => {
+    try {
+      const data = { ...req.body };
+      if (data.departmentId === "") data.departmentId = null;
+      const validatedData = insertResourceSchema.partial().parse(data);
+      const resource = await storage.updateResource(req.params.id, validatedData);
+      if (!resource) {
+        return res.status(404).json({ error: "Resource not found" });
+      }
+      res.json(resource);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating resource:", error);
+      res.status(500).json({ error: "Failed to update resource" });
+    }
+  });
+
+  app.delete("/api/organisation/resources/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteResource(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Resource not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting resource:", error);
+      res.status(500).json({ error: "Failed to delete resource" });
+    }
+  });
+
+  // ============ KNOWLEDGE ARTICLES ============
+  app.get("/api/organisation/knowledge", async (req, res) => {
+    try {
+      const { department, search, published } = req.query;
+      let articleList;
+      if (search) {
+        articleList = await storage.searchKnowledgeArticles(search as string);
+      } else if (department) {
+        articleList = await storage.getKnowledgeArticlesByDepartment(department as string);
+      } else if (published === 'true') {
+        articleList = await storage.getPublishedKnowledgeArticles();
+      } else {
+        articleList = await storage.getKnowledgeArticles();
+      }
+      res.json(articleList);
+    } catch (error) {
+      console.error("Error fetching knowledge articles:", error);
+      res.status(500).json({ error: "Failed to fetch knowledge articles" });
+    }
+  });
+
+  app.get("/api/organisation/knowledge/:id", async (req, res) => {
+    try {
+      const article = await storage.getKnowledgeArticle(req.params.id);
+      if (!article) {
+        return res.status(404).json({ error: "Article not found" });
+      }
+      res.json(article);
+    } catch (error) {
+      console.error("Error fetching article:", error);
+      res.status(500).json({ error: "Failed to fetch article" });
+    }
+  });
+
+  app.get("/api/organisation/knowledge/slug/:slug", async (req, res) => {
+    try {
+      const article = await storage.getKnowledgeArticleBySlug(req.params.slug);
+      if (!article) {
+        return res.status(404).json({ error: "Article not found" });
+      }
+      res.json(article);
+    } catch (error) {
+      console.error("Error fetching article by slug:", error);
+      res.status(500).json({ error: "Failed to fetch article" });
+    }
+  });
+
+  app.post("/api/organisation/knowledge", async (req, res) => {
+    try {
+      const data = { ...req.body };
+      if (data.departmentId === "") data.departmentId = null;
+      const validatedData = insertKnowledgeArticleSchema.parse(data);
+      const article = await storage.createKnowledgeArticle(validatedData);
+      res.status(201).json(article);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating article:", error);
+      res.status(500).json({ error: "Failed to create article" });
+    }
+  });
+
+  app.patch("/api/organisation/knowledge/:id", async (req, res) => {
+    try {
+      const data = { ...req.body };
+      if (data.departmentId === "") data.departmentId = null;
+      const validatedData = insertKnowledgeArticleSchema.partial().parse(data);
+      const article = await storage.updateKnowledgeArticle(req.params.id, validatedData);
+      if (!article) {
+        return res.status(404).json({ error: "Article not found" });
+      }
+      res.json(article);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating article:", error);
+      res.status(500).json({ error: "Failed to update article" });
+    }
+  });
+
+  app.delete("/api/organisation/knowledge/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteKnowledgeArticle(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Article not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting article:", error);
+      res.status(500).json({ error: "Failed to delete article" });
     }
   });
 

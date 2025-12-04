@@ -1,0 +1,262 @@
+You are an expert app architect and no-code app builder.
+
+I want you to design and build a simple, production-ready app for a small local lunch bar that is always busy at their sandwich/wrap bar.
+
+The goal of the app:
+- Let customers order their sandwich/wrap/salad online BEFORE they arrive.
+- Let them pay online.
+- Let staff see incoming orders on an iPad at the sandwich station in a very clear, visual way.
+- Let staff update order status easily (e.g. “New”, “In Progress”, “Ready”, “Out of stock – needs reply”).
+- Let staff quickly toggle ingredients in and out of stock so customers cannot order things that are unavailable.
+- Make it very fast and simple for the staff to use in the middle of a busy lunch rush.
+
+Please read ALL requirements below first, then:
+1) Restate your understanding of the app.
+2) Propose the data structure (tables, fields, relationships).
+3) Propose the main screens and flows.
+4) THEN generate the app based on your proposal.
+
+If any part is not technically possible in this environment, explain the limitation clearly and suggest the closest alternative instead of refusing.
+
+------------------------------------------------
+PART 1 – APP USERS & ROLES
+------------------------------------------------
+
+There are two main types of users:
+
+1. CUSTOMER
+- Can browse the menu (based on a paper order form the shop already uses).
+- Can build their order (e.g. choose wrap/sandwich/salad, bread type, fillings, salads, extras, sauce, etc.).
+- Can choose a preferred pickup time (within the shop’s open hours).
+- Can see an order summary and pay online.
+- Can see their order status:
+  - NEW / RECEIVED
+  - IN PROGRESS / BEING MADE
+  - READY FOR PICKUP
+  - ISSUE – PLEASE CHECK MESSAGE (e.g. ingredient out of stock)
+- Should be notified when the order is marked READY.
+  - If push notifications are not possible, use in-app status with a refresh button and optionally email/SMS if supported by this platform.
+
+2. STAFF / ADMIN (SANDWICH STATION)
+- Use an iPad at the sandwich bar.
+- See a live queue of orders as they come in (sorted by pickup time and order time).
+- Each order tile should clearly show:
+  - Customer name
+  - Pickup time
+  - Order items (with ingredients clearly listed)
+  - Special instructions
+  - Payment status (paid/unpaid)
+- Staff should be able to:
+  - Tap an order and mark status: “Start / In Progress” → “Ready” → “Completed”.
+  - Tap a simple button to mark an ingredient “Out of stock”.
+  - When an ingredient is out of stock and an order contains it:
+    - The system should flag the order.
+    - Staff can send a quick pre-written message to the customer: for example,
+      “We’ve just run out of [INGREDIENT]. Would you like to replace it with [ALT_INGREDIENT] or remove it?”
+    - Customer can confirm/change via a simple yes/no or quick choice if this platform allows; otherwise we just show a note that staff will confirm verbally at pickup.
+
+- Admin (owner/manager) should also have access to:
+  - Manage menu items and prices.
+  - Manage ingredient stock toggles (in stock / out of stock).
+  - View basic order history.
+
+------------------------------------------------
+PART 2 – MENU & ORDER FORM
+------------------------------------------------
+
+The lunch bar already has a printed order form at the counter that customers fill out. I want the digital ordering screen to mirror that form as closely as possible.
+
+Please create a flexible menu structure based on typical sandwich bar sections such as:
+
+- Base type:
+  - Wrap
+  - Sandwich
+  - Roll
+  - Salad bowl
+- Bread/wrap options:
+  - e.g. White, Wholemeal, Multigrain, Gluten-free wrap, etc.
+- Standard fillings:
+  - e.g. Ham, Chicken, Turkey, Tuna, Egg, Falafel, etc. (these should be configurable).
+- Salad options (multi-select):
+  - e.g. Lettuce, Tomato, Cucumber, Carrot, Onion, Cheese, etc.
+- Extras / add-ons:
+  - e.g. Avocado, Extra meat, Extra cheese, Bacon, etc. with extra cost.
+- Sauces:
+  - e.g. Mayo, Sweet chilli, BBQ, etc.
+- Toasted or not.
+- Any special notes field.
+
+INSTRUCTIONS:
+- Build the menu system so that:
+  - New products and categories can be added in the future (e.g. hot food, coffee).
+  - Each ingredient can be toggled “in stock” / “out of stock”.
+  - If an item is out of stock, it should not be selectable for new customer orders.
+  - If an item goes out of stock AFTER an order is placed, staff can flag that order as “Issue – Out of stock” and send a pre-written message.
+
+If possible, design the menu configuration so that:
+- Admin can configure:
+  - Name
+  - Category (base/filling/salad/extra/sauce)
+  - Price
+  - In-stock flag (True/False)
+
+------------------------------------------------
+PART 3 – ORDER FLOW (CUSTOMER SIDE)
+------------------------------------------------
+
+The typical online customer flow should be:
+
+1. HOME SCREEN
+   - Simple landing screen with:
+     - Lunch bar name and logo (placeholder for now).
+     - Button: “Order Now”.
+     - Display today’s opening hours and current order cut-off times if possible.
+
+2. ORDER BUILDER
+   - Step 1: Choose base (wrap, sandwich, roll, salad, etc.).
+   - Step 2: Choose bread/wrap type.
+   - Step 3: Choose filling(s).
+   - Step 4: Choose salad toppings (multi-select).
+   - Step 5: Choose extras/add-ons (with extra prices shown).
+   - Step 6: Choose sauce(s).
+   - Step 7: Toasted or not.
+   - Step 8: Add special instructions.
+   - Step 9: Choose pickup time:
+     - Must be within store open hours.
+     - Default to “ASAP” with an estimated prep time (e.g. 10–20 mins) if supported.
+
+3. CART & CHECKOUT
+   - Show order summary (items, ingredients, total price).
+   - Allow customer to add multiple items (e.g. 2 wraps, 1 salad).
+   - Allow them to enter:
+     - Name
+     - Phone number
+     - Optional email
+   - Require payment online (if payment is not supported, simulate “paid” status and treat it as “pay on pickup” – but design as if online payment is possible).
+
+4. ORDER CONFIRMATION
+   - Show order number and pickup time.
+   - Show order status as “Received”.
+   - Provide a “View order status” screen where they can see updates:
+     - “Received”
+     - “In progress”
+     - “Ready for pickup”
+     - “Issue – please see counter” (if needed).
+
+------------------------------------------------
+PART 4 – SANDWICH STATION iPAD VIEW (STAFF SIDE)
+------------------------------------------------
+
+This is critical. The iPad view must be:
+
+- Simple
+- Big and visual
+- Easy to tap with messy hands during rush hour
+
+Requirements:
+
+1. MAIN QUEUE SCREEN
+   - Display orders in a scrollable list or tile grid.
+   - Each order tile should show:
+     - Order number
+     - Customer name
+     - Pickup time
+     - Time since order received
+     - High-level summary (e.g. “Chicken wrap, salad bowl”)
+     - Current status (colour coded: NEW, IN PROGRESS, READY, ISSUE).
+   - Allow sorting by:
+     - Pickup time (default)
+     - Time since received.
+
+   - When a new order arrives:
+     - Visually highlight it (e.g. border, blink) and optionally play a subtle sound if possible.
+
+2. ORDER DETAIL VIEW
+   - When staff tap an order tile, they see:
+     - Full breakdown of each item and ingredients in a clean layout.
+     - Special instructions.
+     - Payment status.
+   - Buttons:
+     - “Mark as In Progress”
+     - “Mark as Ready”
+     - “Mark as Completed”
+     - “Flag as Issue – Out of Stock”
+   - If “Flag as Issue – Out of Stock” is used:
+     - Allow staff to tick which ingredient is out of stock.
+     - Generate a simple message template to the customer (if messaging is supported) or at least flag the order with a big warning for pick-up.
+
+3. ORDER STATUS UPDATE
+   - When an order is:
+     - Marked “In Progress”: update in customer view.
+     - Marked “Ready”: update in customer view and trigger notification (if possible).
+   - Completed orders should move to a separate “Completed” list so the main queue only shows active orders.
+
+4. STOCK TOGGLE SECTION
+   - On the iPad, add a simple “Stock” tab or side panel:
+
+   - Show a list of key ingredients/choices with a simple toggle:
+     - In Stock / Out of Stock
+   - Changes should:
+     - Immediately prevent new orders from selecting that ingredient.
+     - Visually display “OUT OF STOCK” next to that ingredient in any menus.
+   - For simplicity, we can start with:
+     - Bread/wrap types
+     - Popular proteins/fillings
+     - Popular extras (like avocado).
+
+------------------------------------------------
+PART 5 – DATA MODEL (PLEASE DESIGN)
+------------------------------------------------
+
+Please propose a clean, normalised data model that supports all of this. At a minimum, include entities such as:
+
+- Customer
+- Order
+- OrderItem
+- MenuCategory
+- MenuItem
+- MenuOption / Ingredient
+- IngredientStock (or a simple in_stock boolean on MenuItem/Ingredient)
+- StaffUser (optional, can also have a generic “Staff” role)
+- OpeningHours (optional, but ideal for future)
+
+For each entity, list:
+- Field name
+- Data type
+- Example value
+- Relationship to other entities
+
+------------------------------------------------
+PART 6 – TECHNICAL & UX EXPECTATIONS
+------------------------------------------------
+
+- Design everything with a small local lunch bar in mind: low tech, minimal training.
+- Prioritise:
+  - Fewer clicks for staff.
+  - Clear fonts and large buttons on iPad.
+  - Very clear states: NEW, IN PROGRESS, READY, ISSUE, COMPLETED.
+- If true “real-time” updates are not possible in this environment, simulate with:
+  - Frequent polling, or
+  - A “refresh orders” button for staff.
+
+- Build the app so that in future it can be extended with:
+  - Loyalty points or “order history” for repeat customers.
+  - Saved favourite orders.
+
+------------------------------------------------
+PART 7 – YOUR TASK
+------------------------------------------------
+
+1) First, restate my goal in your own words to confirm understanding.
+2) Then, design the data model with tables and fields.
+3) Then, outline the key screens and user flows (Customer + Staff).
+4) Finally, generate the actual app structure, screens, and logic within this platform as far as is technically possible.
+
+If any feature (e.g. notifications, payment) cannot be fully implemented in this environment:
+- Do NOT refuse.
+- Instead, create the data structure and UI placeholders and explain how it would integrate with real payment/notification gateways in a production environment.
+
+Make sure the end result is:
+- Usable by real customers to place orders.
+- Usable by sandwich staff on an iPad to manage orders and stock.
+- Easy for the owner to maintain the menu and stock toggles.

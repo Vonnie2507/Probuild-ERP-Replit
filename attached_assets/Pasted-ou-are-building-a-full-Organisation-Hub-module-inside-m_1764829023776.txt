@@ -1,0 +1,541 @@
+ou are building a full “Organisation Hub” module inside my ProBuild PVC ERP.
+
+This module is an internal portal for staff. It lives as a main navigation item in the left sidebar called “Organisation” and has multiple sub-sections for workflows, policies, HR, onboarding, knowledge base and one-on-one meetings.
+
+The goal is to have one place where staff can:
+	•	Read workflows, policies, procedures
+	•	Submit forms (incident, leave, training, etc.)
+	•	Access their onboarding documents and contracts
+	•	See department structure and responsibilities
+	•	View visual flows of processes
+	•	Log and review one-on-one meetings and development
+	•	Ask questions and get help on how to do their job
+
+⸻
+
+1. GENERAL REQUIREMENTS
+	1.	Tech stack (preferred):
+	•	Frontend: React (TypeScript if possible)
+	•	Backend: Node.js / Express (or framework Base44 prefers)
+	•	Database: PostgreSQL or MySQL
+	•	Auth: Reuse existing ERP auth/session system (assume we already have users and roles)
+	2.	User roles (minimum):
+	•	ADMIN – full access to all configuration, data and settings
+	•	MANAGER – can view/edit workflows, create policies, approve HR forms for their team, manage one-on-ones
+	•	HR – can see all HR forms, staff records, onboarding, incidents
+	•	STAFF – can view content, submit forms, see their own records and one-on-one notes (where appropriate)
+	3.	Navigation behaviour:
+	•	Left sidebar item: Organisation
+	•	When clicked, it opens sub-menu with:
+	•	Workflows & SOPs
+	•	Policies & Procedures
+	•	Knowledge Base (Ask Probuild)
+	•	Department Directory
+	•	HR Hub
+	•	Onboarding & Documents
+	•	One-on-Ones & Development
+	•	Visual Flows
+	•	Resource Library
+	4.	UX conventions:
+	•	Use a standard layout: left sidebar, top bar with search + user menu, main content on the right.
+	•	All major lists should have:
+	•	Search box
+	•	Filters
+	•	Sort options
+	•	Pagination
+	•	All create/edit screens should include:
+	•	Client-side validation
+	•	Clear required/optional fields
+	•	Cancel/Save buttons
+	•	Error messages
+
+⸻
+
+2. DATA MODELS (DATABASE SCHEMA)
+
+Define these tables (adapt naming to your usual style):
+
+2.1 users
+Assume this already exists in ERP, but we need to reference it.
+	•	id (PK)
+	•	name
+	•	email
+	•	role (enum: ADMIN / MANAGER / HR / STAFF)
+	•	department_id (FK to departments.id, nullable)
+
+2.2 departments
+	•	id (PK)
+	•	name (e.g. “Sales”, “Production”, “Install Team”)
+	•	description
+	•	manager_user_id (FK to users.id, nullable)
+	•	created_at
+	•	updated_at
+
+2.3 workflows
+	•	id (PK)
+	•	title (e.g. “Supply Only Job Workflow”)
+	•	description (short overview)
+	•	department_id (FK to departments.id, nullable)
+	•	category (e.g. “Sales”, “Production”, “Install”, etc.)
+	•	status (enum: ACTIVE / DRAFT / ARCHIVED)
+	•	created_by_user_id (FK to users.id)
+	•	current_version_id (FK to workflow_versions.id, nullable)
+	•	created_at
+	•	updated_at
+
+2.4 workflow_versions
+Each workflow can have multiple versions.
+	•	id (PK)
+	•	workflow_id (FK to workflows.id)
+	•	version_number (integer, auto-increment per workflow)
+	•	content_markdown (full text with steps, headings, etc.)
+	•	json_steps (JSON for structured steps: step number, title, description, responsible role, etc.)
+	•	change_summary
+	•	created_by_user_id
+	•	created_at
+	•	is_published (boolean)
+
+2.5 policies
+	•	id (PK)
+	•	title
+	•	category (e.g. “Safety”, “HR”, “Warehouse”, “Vehicles”, etc.)
+	•	department_id (FK, optional)
+	•	status (enum: ACTIVE / DRAFT / ARCHIVED)
+	•	current_version_id (FK to policy_versions.id, nullable)
+	•	created_by_user_id
+	•	created_at
+	•	updated_at
+
+2.6 policy_versions
+	•	id (PK)
+	•	policy_id (FK)
+	•	version_number
+	•	content_markdown (full policy content)
+	•	file_url (optional link to PDF)
+	•	change_summary
+	•	effective_from (date)
+	•	created_by_user_id
+	•	created_at
+	•	is_published (boolean)
+
+2.7 policy_acknowledgements
+Track which users have read/acknowledged.
+	•	id (PK)
+	•	policy_id (FK)
+	•	policy_version_id (FK)
+	•	user_id (FK)
+	•	acknowledged_at
+
+2.8 knowledge_articles
+For internal how-to content used by search and chatbot.
+	•	id (PK)
+	•	title
+	•	slug
+	•	content_markdown
+	•	department_id (FK, optional)
+	•	tags (array or JSON)
+	•	source_type (enum: MANUAL / IMPORTED_FROM_WORKFLOW / IMPORTED_FROM_POLICY / EXTERNAL)
+	•	related_workflow_id (FK, optional)
+	•	related_policy_id (FK, optional)
+	•	created_by_user_id
+	•	created_at
+	•	updated_at
+
+2.9 knowledge_embeddings (if you support AI search)
+	•	id (PK)
+	•	knowledge_article_id (FK)
+	•	chunk_index (int)
+	•	embedding_vector (vector type or JSON)
+	•	created_at
+
+2.10 hr_forms
+Generic form submissions for HR hub.
+	•	id (PK)
+	•	type (enum: INCIDENT_REPORT / LEAVE_REQUEST / TRAINING_REQUEST / OTHER)
+	•	title
+	•	description
+	•	status (OPEN / UNDER_REVIEW / APPROVED / REJECTED / CLOSED)
+	•	submitted_by_user_id (FK)
+	•	assigned_to_user_id (FK, nullable, usually manager or HR)
+	•	department_id (FK, nullable)
+	•	created_at
+	•	updated_at
+
+2.11 hr_form_payloads
+Store the structured form content as JSON.
+	•	id (PK)
+	•	hr_form_id (FK)
+	•	payload_json (JSON – includes all form fields entered)
+	•	created_at
+
+2.12 staff_records
+General staff record data (HR profile).
+	•	id (PK)
+	•	user_id (FK)
+	•	position_title
+	•	start_date
+	•	end_date (nullable)
+	•	employment_type (FULL_TIME / PART_TIME / CASUAL / CONTRACTOR)
+	•	manager_user_id (FK)
+	•	notes
+	•	created_at
+	•	updated_at
+
+2.13 staff_documents
+Contracts, licences, certificates.
+	•	id (PK)
+	•	staff_record_id (FK)
+	•	document_type (CONTRACT / LICENSE / CERTIFICATE / OTHER)
+	•	title
+	•	file_url
+	•	issued_date (nullable)
+	•	expiry_date (nullable)
+	•	created_at
+
+2.14 onboarding_checklists
+Templates for onboarding.
+	•	id (PK)
+	•	name (e.g. “Installer Onboarding”, “Office Staff Onboarding”)
+	•	description
+	•	department_id (FK, optional)
+	•	created_by_user_id
+	•	created_at
+	•	updated_at
+
+2.15 onboarding_tasks
+Tasks belonging to an onboarding checklist.
+	•	id (PK)
+	•	onboarding_checklist_id (FK)
+	•	task_order (int)
+	•	title
+	•	description
+	•	required (boolean)
+
+2.16 onboarding_assignments
+Specific application of checklist to a staff member.
+	•	id (PK)
+	•	staff_record_id (FK)
+	•	onboarding_checklist_id (FK)
+	•	assigned_date
+	•	completed_date (nullable)
+	•	status (NOT_STARTED / IN_PROGRESS / COMPLETE)
+
+2.17 onboarding_assignment_tasks
+	•	id (PK)
+	•	onboarding_assignment_id (FK)
+	•	onboarding_task_id (FK)
+	•	status (NOT_STARTED / IN_PROGRESS / COMPLETE)
+	•	completed_at (nullable)
+	•	completed_by_user_id (FK, nullable)
+
+2.18 one_on_one_sessions
+For 1:1 meetings.
+	•	id (PK)
+	•	employee_user_id (FK)
+	•	manager_user_id (FK)
+	•	scheduled_at (datetime)
+	•	duration_minutes (nullable)
+	•	location (string)
+	•	status (SCHEDULED / COMPLETED / CANCELLED)
+	•	overall_summary
+	•	created_at
+	•	updated_at
+
+2.19 one_on_one_notes
+	•	id (PK)
+	•	session_id (FK)
+	•	author_user_id (FK)
+	•	visibility (enum: SHARED_WITH_EMPLOYEE / MANAGER_ONLY / HR_ONLY)
+	•	note_text
+	•	created_at
+
+2.20 one_on_one_action_items
+	•	id (PK)
+	•	session_id (FK)
+	•	description
+	•	assigned_to_user_id (FK)
+	•	due_date (nullable)
+	•	status (OPEN / IN_PROGRESS / DONE)
+	•	created_at
+	•	completed_at (nullable)
+
+2.21 media_files
+For audio/video uploads attached to sessions, incidents, training, etc.
+	•	id (PK)
+	•	entity_type (enum: ONE_ON_ONE_SESSION / HR_FORM / WORKFLOW / POLICY / OTHER)
+	•	entity_id (FK to that entity)
+	•	file_url
+	•	file_type (AUDIO / VIDEO / IMAGE / PDF / OTHER)
+	•	uploaded_by_user_id
+	•	uploaded_at
+
+2.22 visual_flows
+	•	id (PK)
+	•	title
+	•	description
+	•	department_id (FK, optional)
+	•	diagram_type (UPLOADED_IMAGE / EMBEDDED_TOOL / JSON_FLOW)
+	•	file_url (if uploaded)
+	•	json_definition (if using a flow library)
+	•	created_by_user_id
+	•	created_at
+	•	updated_at
+
+2.23 resources
+Central resource library (PDFs, links, manuals).
+	•	id (PK)
+	•	title
+	•	description
+	•	resource_type (FILE / LINK)
+	•	file_url (if FILE)
+	•	external_url (if LINK)
+	•	tags (JSON/array)
+	•	department_id (FK, nullable)
+	•	uploaded_by_user_id
+	•	uploaded_at
+
+⸻
+
+3. FEATURE-BY-FEATURE SPECIFICATION
+
+3.1 Workflows & SOPs
+UI requirements:
+	•	Page: /organisation/workflows
+	•	Show table with: Title, Department, Category, Status, Last Updated, Last Updated By.
+	•	Filters: department, status, category.
+	•	Search field on title and description.
+
+Actions:
+	•	ADMIN / MANAGER can:
+	•	Create workflow
+	•	Edit workflow
+	•	Create new version
+	•	Publish a version
+	•	Archive workflow
+	•	STAFF can:
+	•	View published workflows only
+
+View screen:
+	•	Title, department, category, current version number
+	•	List of steps (from json_steps)
+	•	Full content (markdown rendered)
+	•	Attachments (related media_files and resources)
+	•	Links to related knowledge articles
+
+⸻
+
+3.2 Policies & Procedures
+UI:
+	•	List view similar to workflows.
+	•	Filter by category and department.
+	•	Show whether user has acknowledged latest version.
+
+Behaviour:
+	•	Policy view screen shows current published version.
+	•	Below content, show:
+	•	“I have read and understood this policy” button.
+	•	Once clicked, create policy_acknowledgements record.
+	•	Show history tab with previous versions and change summaries.
+
+Permissions:
+	•	ADMIN / HR / MANAGER can create/edit/publish policies.
+	•	STAFF can only view + acknowledge.
+
+⸻
+
+3.3 Knowledge Base (Ask Probuild)
+UI:
+	•	Search bar at top.
+	•	Results list of knowledge_articles.
+	•	Detail view: show article content, related workflows/policies.
+
+AI search:
+	•	When articles are created or updated and marked as is_published, generate/refresh embeddings in knowledge_embeddings.
+	•	Expose an endpoint that:
+	•	Takes a query string.
+	•	Embeds the query.
+	•	Finds nearest articles by vector similarity.
+	•	Returns top 5–10 articles.
+
+Chat interface (if possible):
+	•	Chat component with messages.
+	•	System uses the knowledge articles as context.
+
+⸻
+
+3.4 Department Directory
+UI:
+	•	Page: /organisation/departments
+	•	List of departments with:
+	•	Department name
+	•	Manager
+	•	Number of staff
+	•	Clicking one shows:
+	•	Description
+	•	Manager
+	•	Staff members (names, roles)
+	•	Related workflows, policies, resources
+
+Permissions:
+	•	All roles can view.
+	•	ADMIN can create/edit departments and assign manager/staff.
+
+⸻
+
+3.5 HR Hub
+Sections:
+	•	My HR Forms
+	•	All HR Forms (for HR/ADMIN)
+	•	Create New Form (type dropdown)
+
+Incident Report Form:
+	•	Fields in payload:
+	•	incident_date
+	•	incident_time
+	•	location
+	•	people_involved (list of user IDs + free text)
+	•	description
+	•	injury_occurred (boolean)
+	•	witnesses (text)
+	•	attachments (media_files)
+
+Leave Request Form:
+	•	leave_type (ANNUAL / SICK / UNPAID / OTHER)
+	•	start_date
+	•	end_date
+	•	reason
+	•	status (OPEN / APPROVED / REJECTED)
+	•	manager_comments
+
+Training Request Form:
+	•	course_name
+	•	provider
+	•	why_needed
+	•	preferred_dates
+	•	status
+
+Status transitions:
+	•	When a form is created → status = OPEN.
+	•	Managers/HR can change status, assign assigned_to_user_id, add notes via hr_form_payloads or another notes table.
+
+⸻
+
+3.6 Onboarding & Documents
+For each staff member:
+	•	View staff profile (from staff_records).
+	•	View associated staff_documents (contracts, licenses, etc.).
+	•	See onboarding assignments and task completion.
+
+Onboarding checklist:
+	•	ADMIN/HR define templates via onboarding_checklists and onboarding_tasks.
+	•	When staff starts:
+	•	HR/Manager assigns a template → creates onboarding_assignments + onboarding_assignment_tasks.
+	•	Staff/manager can tick tasks off as complete.
+
+⸻
+
+3.7 One-on-Ones & Development
+List view:
+	•	Page: /organisation/one-on-ones
+	•	Show upcoming and past sessions for current user (as manager or employee).
+
+Session detail:
+	•	Date/time, participants, status.
+	•	Notes tab:
+	•	List of one_on_one_notes with visibility tags.
+	•	Ability to add new notes based on permissions.
+	•	Action items tab:
+	•	List of one_on_one_action_items.
+	•	Create/edit items, mark as done.
+
+Permissions:
+	•	MANAGER can create sessions for their direct reports.
+	•	EMPLOYEE can view sessions where they are employee_user_id, and notes where visibility = SHARED_WITH_EMPLOYEE.
+	•	ADMIN / HR can view all (with caution on MANAGER_ONLY notes based on config).
+
+⸻
+
+3.8 Visual Flows
+UI:
+	•	Gallery of flow diagrams.
+	•	Each item shows: title, department, short description.
+
+Behaviour:
+	•	Admin/manager can:
+	•	Upload image/PDF of a flowchart OR
+	•	Create/edit via a JSON-based flow editor (if supported).
+	•	If JSON-based, use a simple node-edge structure:
+	•	nodes: id, label, type
+	•	edges: source, target, label
+
+⸻
+
+3.9 Resource Library
+UI:
+	•	Page: /organisation/resources
+	•	Filter by type (file/link), department, tags.
+
+Behaviour:
+	•	Upload file:
+	•	Title, description, department, tags.
+	•	Save file_url.
+	•	Add link:
+	•	Title, description, external_url, department, tags.
+
+Permissions:
+	•	Any user can view.
+	•	ADMIN / MANAGER / HR can add/edit/delete.
+
+⸻
+
+4. API ENDPOINTS (EXAMPLES)
+
+You don’t have to match these exactly, but please expose REST endpoints similar to:
+	•	GET /api/organisation/workflows
+	•	POST /api/organisation/workflows
+	•	GET /api/organisation/workflows/:id
+	•	POST /api/organisation/workflows/:id/versions
+	•	POST /api/organisation/workflows/:id/publish-version/:versionId
+	•	GET /api/organisation/policies
+	•	POST /api/organisation/policies
+	•	POST /api/organisation/policies/:id/acknowledge
+	•	GET /api/organisation/knowledge/search?query=...
+	•	POST /api/organisation/knowledge/articles
+	•	POST /api/organisation/knowledge/articles/:id/embed
+	•	GET /api/organisation/departments
+	•	POST /api/organisation/departments
+	•	GET /api/organisation/hr/forms
+	•	POST /api/organisation/hr/forms
+	•	PATCH /api/organisation/hr/forms/:id (update status/assignee)
+	•	GET /api/organisation/staff/:userId/records
+	•	POST /api/organisation/staff/:userId/documents
+	•	GET /api/organisation/onboarding/templates
+	•	POST /api/organisation/onboarding/assignments
+	•	GET /api/organisation/one-on-ones
+	•	POST /api/organisation/one-on-ones
+	•	POST /api/organisation/one-on-ones/:id/notes
+	•	POST /api/organisation/one-on-ones/:id/action-items
+	•	GET /api/organisation/visual-flows
+	•	POST /api/organisation/visual-flows
+	•	GET /api/organisation/resources
+	•	POST /api/organisation/resources
+
+Please:
+	•	Enforce permissions based on users.role.
+	•	Reuse existing auth/session layer from the ERP.
+
+⸻
+
+5. WHAT I EXPECT YOU (THE CODE GENERATOR) TO RETURN
+
+When you respond, do not just describe features.
+Instead, return:
+	1.	Database schema – SQL or migration-style definitions for all tables above.
+	2.	Backend structure – folder layout, key controller/service files, and example implementations for at least a few endpoints.
+	3.	Frontend structure – React component tree for the Organisation module, including routing.
+	4.	Example components – at minimum:
+	•	Workflows list + detail view
+	•	Policies list + view with acknowledgement
+	•	HR form creation + detail view
+	•	One-on-one session page with notes & actions
+	5.	Notes on integration – how to integrate this module with the existing user/auth system in the ERP.

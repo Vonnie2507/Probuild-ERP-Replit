@@ -25,6 +25,12 @@ import Installer from "@/pages/Installer";
 import Trade from "@/pages/Trade";
 import NotFound from "@/pages/not-found";
 
+import OrganisationDepartments from "@/pages/organisation/Departments";
+import OrganisationWorkflows from "@/pages/organisation/Workflows";
+import OrganisationPolicies from "@/pages/organisation/Policies";
+import OrganisationResources from "@/pages/organisation/Resources";
+import OrganisationKnowledge from "@/pages/organisation/Knowledge";
+
 function MainLayout({ children }: { children: React.ReactNode }) {
   const style = {
     "--sidebar-width": "16rem",
@@ -127,6 +133,31 @@ function Router() {
         <TradeLayout>
           <Trade />
         </TradeLayout>
+      </Route>
+      <Route path="/organisation/departments">
+        <MainLayout>
+          <OrganisationDepartments />
+        </MainLayout>
+      </Route>
+      <Route path="/organisation/workflows">
+        <MainLayout>
+          <OrganisationWorkflows />
+        </MainLayout>
+      </Route>
+      <Route path="/organisation/policies">
+        <MainLayout>
+          <OrganisationPolicies />
+        </MainLayout>
+      </Route>
+      <Route path="/organisation/resources">
+        <MainLayout>
+          <OrganisationResources />
+        </MainLayout>
+      </Route>
+      <Route path="/organisation/knowledge">
+        <MainLayout>
+          <OrganisationKnowledge />
+        </MainLayout>
       </Route>
       <Route component={NotFound} />
     </Switch>

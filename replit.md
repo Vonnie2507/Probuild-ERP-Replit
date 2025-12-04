@@ -171,6 +171,27 @@ The numbering logic uses integer-based MAX calculations instead of lexicographic
   - Recalculate button for refreshing P&L summary
   - API endpoints: `/api/quotes/:id/costs`, `/api/quotes/:id/trips`, `/api/quotes/:id/admin-time`, `/api/quotes/:id/pl-summary`
   - Database tables: quote_cost_components, quote_trips, quote_admin_time, quote_ground_conditions, travel_sessions, quote_pl_summary, staff_rate_cards
+- **Organisation Hub** (NEW):
+  - Internal staff hub for company workflows, policies, and knowledge management
+  - Sidebar navigation with 5 sub-sections under "Organisation" group
+  - **Departments Page**: Create/edit/delete departments, assign managers
+  - **Workflows & SOPs Page**: Standard operating procedures with category, status, and version history
+    - Categories: sales, production, install, warehouse, admin, hr, safety, other
+    - Status: active, draft, archived
+    - Version tracking with change summaries
+  - **Policies Page**: Company policies with acknowledgement tracking
+    - Categories: safety, hr, warehouse, vehicles, equipment, operations, other
+    - Policy version history
+    - Staff acknowledgement records
+  - **Resources Page**: Centralized file and link library
+    - Resource types: file, link
+    - Department filtering
+  - **Knowledge Base Page**: Internal documentation with markdown content
+    - Slug-based URLs for easy sharing
+    - Published/draft status toggle
+    - Department categorization
+  - API endpoints: `/api/organisation/departments`, `/api/organisation/workflows`, `/api/organisation/policies`, `/api/organisation/resources`, `/api/organisation/knowledge`
+  - Database tables: departments, workflows, workflow_versions, policies, policy_versions, policy_acknowledgements, resources, knowledge_articles
 
 ## Development Notes
 - All pages connected to real backend APIs
