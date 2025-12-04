@@ -1,14 +1,17 @@
+import { useState } from "react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { JobKanbanCard } from "./JobKanbanCard";
+import { cn } from "@/lib/utils";
 import type { Job, Client, User } from "@shared/schema";
 
 interface KanbanColumn {
   id: string;
   title: string;
   statuses: string[];
+  defaultStatus: string;
   color: string;
 }
 
@@ -17,37 +20,43 @@ const KANBAN_COLUMNS: KanbanColumn[] = [
     id: "accepted",
     title: "New Jobs",
     statuses: ["accepted", "awaiting_deposit"],
-    color: "bg-slate-100",
+    defaultStatus: "accepted",
+    color: "bg-slate-100 dark:bg-slate-800",
   },
   {
     id: "pipeline",
     title: "Pipeline",
     statuses: ["deposit_paid", "ready_for_production"],
-    color: "bg-blue-50",
+    defaultStatus: "deposit_paid",
+    color: "bg-blue-50 dark:bg-blue-950",
   },
   {
     id: "production",
     title: "Production",
     statuses: ["manufacturing_posts", "manufacturing_panels", "manufacturing_gates", "qa_check"],
-    color: "bg-purple-50",
+    defaultStatus: "manufacturing_posts",
+    color: "bg-purple-50 dark:bg-purple-950",
   },
   {
     id: "scheduling",
     title: "Ready to Schedule",
     statuses: ["ready_for_scheduling"],
-    color: "bg-amber-50",
+    defaultStatus: "ready_for_scheduling",
+    color: "bg-amber-50 dark:bg-amber-950",
   },
   {
     id: "scheduled",
     title: "Scheduled",
     statuses: ["scheduled", "install_posts", "install_panels", "install_gates"],
-    color: "bg-green-50",
+    defaultStatus: "scheduled",
+    color: "bg-green-50 dark:bg-green-950",
   },
   {
     id: "complete",
     title: "Completing",
     statuses: ["install_complete", "awaiting_final_payment", "paid_in_full"],
-    color: "bg-emerald-50",
+    defaultStatus: "install_complete",
+    color: "bg-emerald-50 dark:bg-emerald-950",
   },
 ];
 
@@ -56,10 +65,25 @@ interface JobKanbanBoardProps {
   clients: Client[];
   users: User[];
   isLoading: boolean;
+  isUpdating?: boolean;
   onJobClick: (job: Job) => void;
+  onJobStatusChange?: (jobId: string, newStatus: string) => void;
 }
 
-export function JobKanbanBoard({ jobs, clients, users, isLoading, onJobClick }: JobKanbanBoardProps) {
+export function JobKanbanBoard({ 
+  jobs, 
+  clients, 
+  users, 
+  isLoading, 
+  isUpdating = false,
+  onJobClick,
+  onJobStatusChange 
+}: JobKanbanBoardProps) {
+  const [draggedJob, setDraggedJob] = useState<Job | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  
+  const canDrag = !isUpdating;
+
   const getClientName = (clientId: string | null): string => {
     if (!clientId) return "Unknown";
     const client = clients.find(c => c.id === clientId);
@@ -74,6 +98,44 @@ export function JobKanbanBoard({ jobs, clients, users, isLoading, onJobClick }: 
 
   const getJobsForColumn = (column: KanbanColumn): Job[] => {
     return jobs.filter(job => column.statuses.includes(job.status));
+  };
+
+  const handleDragStart = (e: React.DragEvent, job: Job) => {
+    setDraggedJob(job);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", job.id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, columnId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverColumn(columnId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverColumn(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, column: KanbanColumn) => {
+    e.preventDefault();
+    setDragOverColumn(null);
+    
+    if (draggedJob && onJobStatusChange) {
+      const currentColumn = KANBAN_COLUMNS.find(col => 
+        col.statuses.includes(draggedJob.status)
+      );
+      
+      if (currentColumn?.id !== column.id) {
+        onJobStatusChange(draggedJob.id, column.defaultStatus);
+      }
+    }
+    
+    setDraggedJob(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedJob(null);
+    setDragOverColumn(null);
   };
 
   if (isLoading) {
@@ -106,14 +168,22 @@ export function JobKanbanBoard({ jobs, clients, users, isLoading, onJobClick }: 
             (sum, job) => sum + parseFloat(job.totalAmount || "0"), 
             0
           );
+          const isDropTarget = dragOverColumn === column.id;
 
           return (
             <div 
               key={column.id} 
               className="flex-shrink-0 w-72"
               data-testid={`kanban-column-${column.id}`}
+              onDragOver={(e) => handleDragOver(e, column.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, column)}
             >
-              <Card className={`h-full ${column.color}`}>
+              <Card className={cn(
+                "h-full transition-all duration-200",
+                column.color,
+                isDropTarget && "ring-2 ring-primary ring-offset-2"
+              )}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-sm font-medium">
@@ -135,30 +205,45 @@ export function JobKanbanBoard({ jobs, clients, users, isLoading, onJobClick }: 
                   <ScrollArea className="h-[calc(100vh-16rem)]">
                     <div className="space-y-3 pr-2">
                       {columnJobs.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <p className="text-sm">No jobs</p>
+                        <div className={cn(
+                          "text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg",
+                          isDropTarget && "border-primary bg-primary/5"
+                        )}>
+                          <p className="text-sm">
+                            {isDropTarget ? "Drop here" : "No jobs"}
+                          </p>
                         </div>
                       ) : (
                         columnJobs.map((job) => (
-                          <JobKanbanCard
+                          <div
                             key={job.id}
-                            job={{
-                              id: job.id,
-                              jobNumber: job.jobNumber,
-                              clientName: getClientName(job.clientId),
-                              siteAddress: job.siteAddress,
-                              jobType: job.jobType,
-                              hasGate: job.hasGate || false,
-                              totalAmount: job.totalAmount,
-                              assignedInstallerName: getInstallerName(job.assignedInstaller),
-                              scheduledStartDate: job.scheduledStartDate?.toString(),
-                              isDelayed: job.isDelayed || false,
-                              isWaitingOnClient: job.isWaitingOnClient || false,
-                              stagesCompleted: (job.stagesCompleted as number[]) || [],
-                              status: job.status,
-                            }}
-                            onClick={() => onJobClick(job)}
-                          />
+                            draggable={canDrag}
+                            onDragStart={(e) => canDrag && handleDragStart(e, job)}
+                            onDragEnd={handleDragEnd}
+                            className={cn(
+                              canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+                              draggedJob?.id === job.id && "opacity-50"
+                            )}
+                          >
+                            <JobKanbanCard
+                              job={{
+                                id: job.id,
+                                jobNumber: job.jobNumber,
+                                clientName: getClientName(job.clientId),
+                                siteAddress: job.siteAddress,
+                                jobType: job.jobType,
+                                hasGate: job.hasGate || false,
+                                totalAmount: job.totalAmount,
+                                assignedInstallerName: getInstallerName(job.assignedInstaller),
+                                scheduledStartDate: job.scheduledStartDate?.toString(),
+                                isDelayed: job.isDelayed || false,
+                                isWaitingOnClient: job.isWaitingOnClient || false,
+                                stagesCompleted: (job.stagesCompleted as number[]) || [],
+                                status: job.status,
+                              }}
+                              onClick={() => onJobClick(job)}
+                            />
+                          </div>
                         ))
                       )}
                     </div>

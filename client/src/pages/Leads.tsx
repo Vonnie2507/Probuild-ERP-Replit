@@ -398,7 +398,7 @@ export default function Leads() {
     return {
       total: leadQuotes.length,
       sent: leadQuotes.filter(q => q.status === "sent").length,
-      approved: leadQuotes.filter(q => q.status === "approved" || q.status === "accepted").length,
+      approved: leadQuotes.filter(q => ["approved", "accepted"].includes(q.status as string)).length,
     };
   };
 

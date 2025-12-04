@@ -318,6 +318,32 @@ export default function Jobs() {
     setViewMode("list");
   };
 
+  const handleJobStatusChange = (jobId: string, newStatus: string) => {
+    if (updateJobMutation.isPending) return;
+    
+    const previousJobs = queryClient.getQueryData<Job[]>(["/api/jobs"]);
+    
+    queryClient.setQueryData<Job[]>(["/api/jobs"], (old) => 
+      old?.map(job => 
+        job.id === jobId ? { ...job, status: newStatus as Job["status"] } : job
+      )
+    );
+    
+    updateJobMutation.mutate(
+      { id: jobId, data: { status: newStatus as Job["status"] } },
+      {
+        onError: () => {
+          queryClient.setQueryData(["/api/jobs"], previousJobs);
+          toast({
+            title: "Error",
+            description: "Failed to move job. Please try again.",
+            variant: "destructive",
+          });
+        },
+      }
+    );
+  };
+
   if (viewMode === "kanban") {
     return (
       <div className="flex flex-col h-[calc(100vh-3.5rem)]" data-testid="jobs-kanban-view">
@@ -359,7 +385,9 @@ export default function Jobs() {
             clients={clients}
             users={users}
             isLoading={jobsLoading}
+            isUpdating={updateJobMutation.isPending}
             onJobClick={handleKanbanJobClick}
+            onJobStatusChange={handleJobStatusChange}
           />
         </div>
       </div>
