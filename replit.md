@@ -1,239 +1,42 @@
 # Probuild PVC - ERP & CRM System
 
 ## Overview
-A comprehensive ERP & CRM system for Probuild PVC, a Western Australian PVC fencing manufacturer. The system manages the complete workflow from lead intake through quoting, production, scheduling, installation, and payments for both public customers and trade clients.
+This project is a comprehensive ERP & CRM system for Probuild PVC, a Western Australian PVC fencing manufacturer. The system streamlines the entire business workflow, from initial lead management and quoting to production, scheduling, installation, and payment processing. It caters to both public customers and trade clients, aiming to enhance operational efficiency and customer relationship management.
 
-## Tech Stack
-- **Frontend**: React 18 + TypeScript, Vite, TanStack Query v5, Wouter (routing)
-- **Backend**: Express.js, Drizzle ORM
-- **Database**: PostgreSQL (Neon)
-- **Styling**: Tailwind CSS + shadcn/ui components
-- **Payments**: Stripe integration
-- **Notifications**: Twilio SMS integration
-- **Design**: Carbon Design System principles with brand colors
+## User Preferences
+I prefer simple language and detailed explanations. I want iterative development with frequent, small updates. Ask before making major architectural changes.
 
-## Brand Colors
-- **Dark Teal (Primary)**: #213d42
-- **Orange (Accent)**: #db5c26
-- **Pale Beige (Background)**: #f5e5d6
+## System Architecture
+The system employs a modern web architecture with a clear separation of concerns.
 
-## Project Structure
-```
-├── client/src/
-│   ├── components/
-│   │   ├── shared/          # StatusBadge, StatCard, DataTable, etc.
-│   │   ├── dashboard/       # Dashboard-specific components
-│   │   ├── inventory/       # InventoryTable
-│   │   ├── layout/          # AppSidebar, ThemeToggle
-│   │   └── ui/             # shadcn components
-│   ├── pages/
-│   │   ├── Dashboard.tsx    # Main dashboard with stats
-│   │   ├── Leads.tsx        # Lead management
-│   │   ├── Jobs.tsx         # Job tracking
-│   │   ├── Production.tsx   # Production queue management
-│   │   ├── Schedule.tsx     # Calendar & scheduling
-│   │   ├── Clients.tsx      # Client database
-│   │   ├── Inventory.tsx    # Products & stock management
-│   │   ├── Payments.tsx     # Finance tracking
-│   │   ├── Messages.tsx     # SMS conversations
-│   │   ├── QuoteAnalytics.tsx # Quote performance dashboard
-│   │   ├── AutomationCampaigns.tsx # Automated SMS campaigns
-│   │   ├── Installer.tsx    # Mobile installer app
-│   │   └── Trade.tsx        # Trade portal
-│   └── lib/
-│       └── queryClient.ts   # TanStack Query setup
-├── server/
-│   ├── routes.ts            # API endpoints
-│   ├── storage.ts           # Database operations
-│   ├── seed.ts              # Seed data
-│   └── index.ts             # Express server
-└── shared/
-    └── schema.ts            # Drizzle ORM schemas
-```
+**UI/UX Decisions:**
+-   **Design System:** Adheres to Carbon Design System principles.
+-   **Color Scheme:** Utilizes a brand palette of Dark Teal (`#213d42`), Orange (`#db5c26`), and Pale Beige (`#f5e5d6`).
+-   **Components:** Leverages `shadcn/ui` for UI components.
 
-## Database Schema
-18 main entities:
-- users, clients, leads, fenceStyles, products
-- quotes, jobs, bom, productionTasks, installTasks
-- scheduleEvents, payments, notifications, smsLogs, activityLogs, documents
-- quoteFollowUps, automationCampaigns, campaignEnrollments
-- job_setup_documents, job_setup_products (Job Setup & Handover Live Document)
+**Technical Implementations:**
+-   **Frontend:** Built with React 18, TypeScript, Vite, TanStack Query v5, and Wouter for routing.
+-   **Backend:** Developed using Express.js with Drizzle ORM.
+-   **Database:** PostgreSQL, hosted on Neon.
+-   **Styling:** Achieved with Tailwind CSS.
 
-## API Endpoints
-All endpoints use `/api/` prefix:
-- GET/POST/PATCH/DELETE for CRUD operations
-- Stripe payment integration via `/api/payments/:id/create-checkout`
-- Dashboard stats: `/api/dashboard/stats`
+**Feature Specifications:**
+-   **Core Modules:** Includes modules for Lead Management, Quote Builder, Job Workflow, Production Queue, Scheduling, Inventory, Payments, and CRM Messaging (SMS).
+-   **Specialized Applications:** Features a dedicated Installer Mobile App and a Trade Client Portal for self-service.
+-   **Hierarchical Numbering:** Implements a strict hierarchical numbering system for Leads (`PVC-XXX`), Quotes (`PVC-XXX-Q#`), Jobs (`PVC-XXX-JOB`), and Invoices (`PVC-XXX-INV`) to ensure consistent tracking and data linkage.
+-   **Role-Based Access Control:** Supports 7 distinct user roles (admin, sales, scheduler, production_manager, warehouse, installer, trade_client) with granular permissions.
+-   **Live Document System:** Manages dynamic job setup and handover documents, with template support and lead-level access.
+-   **Analytics & Automation:** Incorporates Quote Analytics Dashboard and configurable Automation Campaigns for SMS, triggered by various business events.
+-   **Internal Management:** Features an "Organisation Hub" for managing departments, workflows, policies, resources, and a knowledge base.
+-   **P&L Calculator:** Provides a staff-only comprehensive job costing and profit/loss analysis tool.
 
-## User Roles
-7 distinct roles with role-based permissions:
-- admin, sales, scheduler, production_manager, warehouse, installer, trade_client
+**System Design Choices:**
+-   **API:** All endpoints are prefixed with `/api/` and support standard CRUD operations.
+-   **Database Schema:** Consists of 18 main entities, including users, clients, leads, quotes, jobs, and various operational and logging tables. JSONB columns are used for flexible data storage in live documents.
+-   **Global Search:** A global search functionality is implemented to search across leads, quotes, and jobs.
+-   **Notifications:** Real-time notification system with persistent storage and UI alerts.
 
-## Key Features
-1. **Lead Management**: Track leads from initial contact to conversion
-2. **Quote Builder**: Generate quotes with trade pricing rules
-3. **Job Workflow**: Full lifecycle from acceptance to completion
-4. **Production Queue**: Track manufacturing stages
-5. **Scheduling**: Calendar-based install/delivery scheduling
-6. **Inventory**: Stock management with reorder alerts
-7. **Payments**: Stripe integration, deposit/final payment tracking
-8. **Installer App**: Mobile-friendly installer interface
-9. **Trade Portal**: Self-service for trade clients
-10. **Job Setup & Handover**: Live document tracking from sales to installation
-
-## Hierarchical Numbering System
-The system uses a hierarchical numbering format that links leads, quotes, jobs, and invoices:
-- **Leads (Opportunities)**: Auto-generated sequential numbers in format `PVC-XXX` (e.g., PVC-001, PVC-002)
-- **Quotes**: Derived from lead number with quote sequence `PVC-XXX-Q#` (e.g., PVC-001-Q1, PVC-001-Q2)
-- **Jobs**: Derived from lead number with `-JOB` suffix `PVC-XXX-JOB` (e.g., PVC-001-JOB)
-- **Invoices**: One per job, derived from lead number with `-INV` suffix `PVC-XXX-INV` (e.g., PVC-001-INV)
-
-Each lead can have multiple quotes, but only one job and one invoice per job. The numbering is auto-generated:
-- `createLead()`: Uses SQL MAX on numeric suffix to generate next sequential lead number (PVC-001, PVC-002, etc.) - handles gaps from deletions
-- `createQuote()`: Uses SQL MAX sequence query on quotes matching lead prefix to generate next sequence (Q1, Q2, etc.) - prevents number reuse
-- `createJob()`: Generates job number and invoice number from the lead's number
-
-The numbering logic uses integer-based MAX calculations instead of lexicographic sorting to ensure correct sequencing beyond PVC-999.
-
-## Recent Changes (December 2025)
-- **Quotes Page** (NEW): Added dedicated Quotes page accessible from sidebar
-  - Renamed sidebar "Leads & Quotes" to just "Leads" 
-  - New "Quotes" menu item in sidebar for focused quotes management
-  - Stats cards: Total Quotes, Approved, Total Value, Pending Value
-  - Searchable and filterable table view of all quotes
-  - Status filter (draft, sent, approved, rejected, expired)
-  - Type filter (public, trade)
-  - Sortable columns with click-to-sort headers
-  - CSV export functionality
-  - Quote detail dialog with full line items and pricing
-  - Quick actions: Send Quote, Mark Approved
-- **Hierarchical Numbering System**: Implemented linked numbering for leads, quotes, jobs, and invoices
-  - Leads auto-generated as PVC-XXX format
-  - Quotes linked to leads as PVC-XXX-Q# format (multiple per lead)
-  - Jobs derived as PVC-XXX-JOB format
-  - Invoices as PVC-XXX-INV format (one per job)
-  - UI updated: "Convert to Quote" replaced with "Create Quote" for clarity
-- **Global Search**: Added search API endpoint (`/api/search/global`) and GlobalSearch component in header with dropdown showing results across leads, quotes, and jobs
-- **Edit/Delete functionality**: Full CRUD operations for Clients, Leads, and Jobs including:
-  - Edit dialogs with form validation
-  - Delete confirmation dialogs with warnings
-  - Inline icon buttons on detail views
-  - Context menu actions on LeadCard component
-- **Client Autocomplete** (NEW): Smart client search when creating/editing leads
-  - Debounced search (300ms) on name, phone, email, and address fields
-  - Suggestions dropdown shows matching clients with phone/address details
-  - Click to select auto-fills all client fields (name, phone, email, address)
-  - Green indicator when existing client is selected
-  - Clear button to start fresh and enter new client info
-  - Automatic client creation when editing leads without existing clients
-  - Backend creates new client or links existing based on phone/email match
-- **Quote Builder**: Comprehensive quote creation system accessible from Leads page:
-  - Line items with product selection from inventory
-  - Quick add buttons for posts, rails, pickets
-  - Trade quote toggle with discount calculations
-  - Materials subtotal, labour, and deposit calculations
-  - Draft save or direct send options
-- **CRM Messaging/SMS**: Bidirectional SMS system via Twilio integration:
-  - Conversation threads grouped by phone number
-  - Real-time message display with optimistic updates
-  - Automated notifications for leads, quotes, payments
-  - SMS logs stored in database with isOutbound field
-- **Notification System**: Real-time notifications with database persistence:
-  - Automatic triggers for leads, quotes, payments, job status
-  - Header bell icon with unread count (30-second polling)
-  - Mark as read and dismiss functionality
-  - NotificationPanel with virtualized list
-- **Calendar Event Management**: Full CRUD for schedule events:
-  - Create/Edit/Delete dialogs with react-hook-form
-  - Event types: install, delivery, pickup, site_measure
-  - Installer assignment and job linking
-  - Backend ISO string to Date object conversion
-- **CSV Export**: Data export for all major entities:
-  - Export buttons on Payments, Jobs, Clients, Leads, Inventory pages
-  - Proper CSV headers (Content-Type, Content-Disposition)
-  - Field escaping for commas/quotes
-  - AU date formatting (DD/MM/YYYY)
-- **Quote Analytics Dashboard** (NEW):
-  - Conversion rates and win rates tracking
-  - Quotes per week with trend indicators
-  - Performance by team member with bar charts
-  - Quote pipeline breakdown with pie charts
-  - Recent quotes list with status badges
-  - API endpoint: `/api/quotes/analytics`
-- **Automation Campaigns** (NEW):
-  - Create/Edit/Delete automated SMS campaigns
-  - Trigger types: quote_sent, quote_no_response_3_days, quote_no_response_7_days, quote_expiring_soon, quote_expired, lead_new, lead_no_contact_24h, job_completed, payment_due
-  - Client type targeting (public, trade, or all)
-  - Configurable delay (days + hours) and send windows
-  - Message templates with placeholders ({client_name}, {quote_number}, {quote_amount})
-  - Active/Paused toggle for campaigns
-  - Campaign enrollments tracking
-  - API endpoints: `/api/automation-campaigns`, `/api/campaign-enrollments`
-- **P&L Calculator** (NEW):
-  - Staff-only comprehensive job costing analysis accessible from Quote detail dialog
-  - Tabbed interface: "Quote Details" and "P&L Analysis" tabs in quote dialog
-  - Real-time profit calculations with margin warnings (< 20% target)
-  - Cost components tracking: materials, manufacturing labour, install labour, travel, admin, supplier fees, third party, ground conditions
-  - Trip tracking: site_quote, post_install, panel_install, gate_install, welder_dropoff/pickup, powder_coat_dropoff/pickup, supplier_delivery, follow_up, warranty
-  - Admin time tracking per staff member with hourly rate calculations
-  - Activity types: quote_creation, client_messaging, client_call, spec_gathering, scheduling, invoicing, follow_up, general_admin
-  - Collapsible cost sections with add/delete functionality
-  - Recalculate button for refreshing P&L summary
-  - API endpoints: `/api/quotes/:id/costs`, `/api/quotes/:id/trips`, `/api/quotes/:id/admin-time`, `/api/quotes/:id/pl-summary`
-  - Database tables: quote_cost_components, quote_trips, quote_admin_time, quote_ground_conditions, travel_sessions, quote_pl_summary, staff_rate_cards
-- **Organisation Hub** (NEW):
-  - Internal staff hub for company workflows, policies, and knowledge management
-  - Sidebar navigation with 5 sub-sections under "Organisation" group
-  - **Departments Page**: Create/edit/delete departments, assign managers
-  - **Workflows & SOPs Page**: Standard operating procedures with category, status, and version history
-    - Categories: sales, production, install, warehouse, admin, hr, safety, other
-    - Status: active, draft, archived
-    - Version tracking with change summaries
-  - **Policies Page**: Company policies with acknowledgement tracking
-    - Categories: safety, hr, warehouse, vehicles, equipment, operations, other
-    - Policy version history
-    - Staff acknowledgement records
-  - **Resources Page**: Centralized file and link library
-    - Resource types: file, link
-    - Department filtering
-  - **Knowledge Base Page**: Internal documentation with markdown content
-    - Slug-based URLs for easy sharing
-    - Published/draft status toggle
-    - Department categorization
-  - API endpoints: `/api/organisation/departments`, `/api/organisation/workflows`, `/api/organisation/policies`, `/api/organisation/resources`, `/api/organisation/knowledge`
-  - Database tables: departments, workflows, workflow_versions, policies, policy_versions, policy_acknowledgements, resources, knowledge_articles
-- **Job Setup & Handover Live Document** (NEW):
-  - 5-section collapsible accordion workflow for supply+install jobs
-  - **Section 1 - Sales & Site Info**: Site conditions, access, equipment needs, hazards
-  - **Section 2 - Products/BOM**: Auto-populated from quote with product validation
-  - **Section 3 - Production Notes**: Manufacturing checklist (posts, panels, gates, hardware)
-  - **Section 4 - Scheduling**: Install date, time window, team assignment, equipment requirements
-  - **Section 5 - Install Notes & Sign-off**: Pre-start checklist, completion notes, client sign-off
-  - Auto-creation: Documents created automatically when viewing supply_install job Setup tab
-  - Progress tracking: Visual progress bar showing section completion (0-5 sections)
-  - Section completion toggles with validation
-  - "Setup & Handover" tab only visible for supply_install jobs
-  - API endpoints: `/api/jobs/:id/setup-document`, `/api/job-setup-documents/:id/section1-5`, `/api/job-setup-documents/:id/section/:number/complete`
-  - Database tables: job_setup_documents, job_setup_products
-  - JSONB columns for flexible section data storage
-- **Job Fulfillment Type at Lead Level** (NEW):
-  - Added `jobFulfillmentType` field to leads table (supply_only or supply_install)
-  - Job type selector in lead create/edit forms (defaults to supply_install)
-  - Job type badges on LeadCard showing "S+I" for supply_install or "Supply" for supply_only
-  - "View Setup Template" preview dialog accessible from LeadCard dropdown for supply_install leads
-  - Shows read-only preview of the 5-section setup workflow before job conversion
-  - Job creation automatically propagates the job type from the lead
-  - Supply-only jobs skip the Setup & Handover tab in job details
-
-## Development Notes
-- All pages connected to real backend APIs
-- Mock data removed and replaced with database queries
-- StatusBadge component supports all job status types
-- TanStack Query v5 object syntax used throughout
-
-## Running the Project
-```bash
-npm run dev    # Starts Express + Vite dev server
-npm run db:push # Push schema to database
-npm run db:seed # Seed test data
-```
+## External Dependencies
+-   **Database:** Neon (PostgreSQL)
+-   **Payment Gateway:** Stripe
+-   **SMS Messaging:** Twilio
