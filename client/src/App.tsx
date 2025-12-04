@@ -281,7 +281,7 @@ function AuthenticatedRouter() {
 }
 
 function LoginRedirect() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   
   if (isLoading) {
     return (
@@ -292,6 +292,9 @@ function LoginRedirect() {
   }
   
   if (isAuthenticated) {
+    if (user?.role === "trade_client") {
+      return <Redirect to="/trade" />;
+    }
     return <Redirect to="/" />;
   }
   
