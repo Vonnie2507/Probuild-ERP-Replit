@@ -13,7 +13,8 @@ import {
   insertResourceSchema, insertKnowledgeArticleSchema,
   insertJobSetupDocumentSchema, insertJobSetupProductSchema,
   section1SalesSchema, section2ProductsMetaSchema, section3ProductionSchema,
-  section4ScheduleSchema, section5InstallSchema
+  section4ScheduleSchema, section5InstallSchema,
+  insertLiveDocumentTemplateSchema
 } from "@shared/schema";
 import { z } from "zod";
 import Stripe from "stripe";
@@ -3516,6 +3517,100 @@ export async function registerRoutes(
     }
   });
 
+  // ============ LIVE DOCUMENT TEMPLATES ============
+
+  // Get all templates
+  app.get("/api/live-doc-templates", async (req, res) => {
+    try {
+      const { active } = req.query;
+      let templates;
+      if (active === "true") {
+        templates = await storage.getActiveLiveDocumentTemplates();
+      } else {
+        templates = await storage.getLiveDocumentTemplates();
+      }
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching live document templates:", error);
+      res.status(500).json({ error: "Failed to fetch templates" });
+    }
+  });
+
+  // Get default template
+  app.get("/api/live-doc-templates/default", async (req, res) => {
+    try {
+      const template = await storage.getDefaultLiveDocumentTemplate();
+      if (!template) {
+        return res.status(404).json({ error: "No default template found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching default template:", error);
+      res.status(500).json({ error: "Failed to fetch default template" });
+    }
+  });
+
+  // Get a specific template by ID
+  app.get("/api/live-doc-templates/:id", async (req, res) => {
+    try {
+      const template = await storage.getLiveDocumentTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching template:", error);
+      res.status(500).json({ error: "Failed to fetch template" });
+    }
+  });
+
+  // Create a new template
+  app.post("/api/live-doc-templates", async (req, res) => {
+    try {
+      const validatedData = insertLiveDocumentTemplateSchema.parse(req.body);
+      const template = await storage.createLiveDocumentTemplate(validatedData);
+      res.status(201).json(template);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating template:", error);
+      res.status(500).json({ error: "Failed to create template" });
+    }
+  });
+
+  // Update a template
+  app.patch("/api/live-doc-templates/:id", async (req, res) => {
+    try {
+      const validatedData = insertLiveDocumentTemplateSchema.partial().parse(req.body);
+      const template = await storage.updateLiveDocumentTemplate(req.params.id, validatedData);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating template:", error);
+      res.status(500).json({ error: "Failed to update template" });
+    }
+  });
+
+  // Delete a template
+  app.delete("/api/live-doc-templates/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteLiveDocumentTemplate(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting template:", error);
+      res.status(500).json({ error: "Failed to delete template" });
+    }
+  });
+
   // ============ JOB SETUP DOCUMENTS ============
 
   // Get all job setup documents
@@ -3599,6 +3694,53 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching job setup document:", error);
       res.status(500).json({ error: "Failed to fetch job setup document" });
+    }
+  });
+
+  // Get live document by lead ID (auto-creates for supply_install leads if not exists)
+  app.get("/api/leads/:leadId/live-document", async (req, res) => {
+    try {
+      let document = await storage.getJobSetupDocumentByLead(req.params.leadId);
+      
+      // If no document exists, auto-create one for supply_install leads
+      if (!document) {
+        const lead = await storage.getLead(req.params.leadId);
+        if (!lead) {
+          return res.status(404).json({ error: "Lead not found" });
+        }
+        
+        if (lead.jobFulfillmentType === "supply_install") {
+          // Get the default template to use for section configurations
+          const defaultTemplate = await storage.getDefaultLiveDocumentTemplate();
+          
+          // Auto-create the live document linked to the lead
+          document = await storage.createJobSetupDocument({
+            leadId: lead.id,
+            templateId: defaultTemplate?.id,
+            jobType: lead.jobFulfillmentType,
+            status: "in_progress",
+            section1Sales: {},
+            section2ProductsMeta: { autoPopulatedFromQuote: false },
+            section3Production: {},
+            section4Schedule: {},
+            section5Install: {},
+            section1Complete: false,
+            section2Complete: false,
+            section3Complete: false,
+            section4Complete: false,
+            section5Complete: false,
+          } as any);
+        } else {
+          return res.status(400).json({ error: "Live documents are only available for supply+install leads" });
+        }
+      }
+      
+      // Also fetch the products for this document
+      const products = await storage.getJobSetupProductsByDocument(document!.id);
+      res.json({ ...document, products });
+    } catch (error) {
+      console.error("Error fetching lead live document:", error);
+      res.status(500).json({ error: "Failed to fetch lead live document" });
     }
   });
 
