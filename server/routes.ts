@@ -467,7 +467,10 @@ export async function registerRoutes(
 
   app.post("/api/leads/:leadId/activities", async (req, res) => {
     try {
-      const { activityType, title, description, metadata } = req.body;
+      const { activityType, title, description, metadata,
+        callDirection, callTimestamp, callDurationSeconds, staffMemberId,
+        callNotes, audioRecordingUrl, aiSummaryText, callTranscriptionText, transcriptionStatus
+      } = req.body;
       
       if (!activityType || !title) {
         return res.status(400).json({ error: "Activity type and title are required" });
@@ -482,6 +485,17 @@ export async function registerRoutes(
       if (description) activityData.description = description;
       if (metadata) activityData.metadata = metadata;
       
+      // Call-specific fields
+      if (callDirection) activityData.callDirection = callDirection;
+      if (callTimestamp) activityData.callTimestamp = new Date(callTimestamp);
+      if (callDurationSeconds !== undefined) activityData.callDurationSeconds = callDurationSeconds;
+      if (staffMemberId) activityData.staffMemberId = staffMemberId;
+      if (callNotes) activityData.callNotes = callNotes;
+      if (audioRecordingUrl) activityData.audioRecordingUrl = audioRecordingUrl;
+      if (aiSummaryText) activityData.aiSummaryText = aiSummaryText;
+      if (callTranscriptionText) activityData.callTranscriptionText = callTranscriptionText;
+      if (transcriptionStatus) activityData.transcriptionStatus = transcriptionStatus;
+      
       const validatedData = insertLeadActivitySchema.parse(activityData);
       
       const activity = await storage.createLeadActivity(validatedData);
@@ -492,6 +506,76 @@ export async function registerRoutes(
       }
       console.error("Error creating lead activity:", error);
       res.status(500).json({ error: "Failed to create lead activity" });
+    }
+  });
+
+  // Get single activity with linked tasks
+  app.get("/api/lead-activities/:id", async (req, res) => {
+    try {
+      const activity = await storage.getLeadActivity(req.params.id);
+      if (!activity) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      
+      const linkedTasks = await storage.getTasksByActivityId(req.params.id);
+      res.json({ ...activity, linkedTasks });
+    } catch (error) {
+      console.error("Error fetching activity:", error);
+      res.status(500).json({ error: "Failed to fetch activity" });
+    }
+  });
+
+  // Update lead activity (for call logs - edit notes, direction, staff member)
+  app.patch("/api/lead-activities/:id", async (req, res) => {
+    try {
+      const { callNotes, callDirection, staffMemberId, aiSummaryText, 
+              callTranscriptionText, transcriptionStatus } = req.body;
+      
+      const updateData: Record<string, unknown> = {};
+      
+      if (callNotes !== undefined) updateData.callNotes = callNotes;
+      if (callDirection !== undefined) updateData.callDirection = callDirection;
+      if (staffMemberId !== undefined) updateData.staffMemberId = staffMemberId;
+      if (aiSummaryText !== undefined) updateData.aiSummaryText = aiSummaryText;
+      if (callTranscriptionText !== undefined) updateData.callTranscriptionText = callTranscriptionText;
+      if (transcriptionStatus !== undefined) updateData.transcriptionStatus = transcriptionStatus;
+      
+      const activity = await storage.updateLeadActivity(req.params.id, updateData);
+      if (!activity) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      res.json(activity);
+    } catch (error) {
+      console.error("Error updating activity:", error);
+      res.status(500).json({ error: "Failed to update activity" });
+    }
+  });
+
+  // Delete lead activity (call log)
+  app.delete("/api/lead-activities/:id", async (req, res) => {
+    try {
+      // Clear the sourceActivityId from any linked tasks before deleting
+      const linkedTasks = await storage.getTasksByActivityId(req.params.id);
+      for (const task of linkedTasks) {
+        await storage.updateLeadTask(task.id, { sourceActivityId: null });
+      }
+      
+      await storage.deleteLeadActivity(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting activity:", error);
+      res.status(500).json({ error: "Failed to delete activity" });
+    }
+  });
+
+  // Get tasks linked to a specific activity (call log)
+  app.get("/api/lead-activities/:id/tasks", async (req, res) => {
+    try {
+      const tasks = await storage.getTasksByActivityId(req.params.id);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching activity tasks:", error);
+      res.status(500).json({ error: "Failed to fetch activity tasks" });
     }
   });
 
@@ -508,7 +592,7 @@ export async function registerRoutes(
 
   app.post("/api/leads/:leadId/tasks", async (req, res) => {
     try {
-      const { title, description, dueDate, priority, assignedTo } = req.body;
+      const { title, description, dueDate, priority, assignedTo, sourceActivityId } = req.body;
       
       if (!title) {
         return res.status(400).json({ error: "Task title is required" });
@@ -524,6 +608,7 @@ export async function registerRoutes(
       if (dueDate) taskData.dueDate = new Date(dueDate);
       if (priority) taskData.priority = priority;
       if (assignedTo) taskData.assignedTo = assignedTo;
+      if (sourceActivityId) taskData.sourceActivityId = sourceActivityId;
       
       const validatedData = insertLeadTaskSchema.parse(taskData);
       

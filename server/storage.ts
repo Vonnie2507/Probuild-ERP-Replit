@@ -90,7 +90,11 @@ export interface IStorage {
 
   // Lead Activities
   getLeadActivities(leadId: string): Promise<LeadActivity[]>;
+  getLeadActivity(id: string): Promise<LeadActivity | undefined>;
   createLeadActivity(activity: InsertLeadActivity): Promise<LeadActivity>;
+  updateLeadActivity(id: string, activity: Partial<InsertLeadActivity>): Promise<LeadActivity | undefined>;
+  deleteLeadActivity(id: string): Promise<boolean>;
+  getTasksByActivityId(activityId: string): Promise<LeadTask[]>;
 
   // Lead Tasks
   getLeadTasks(leadId: string): Promise<LeadTask[]>;
@@ -609,9 +613,33 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(leadActivities.createdAt));
   }
 
+  async getLeadActivity(id: string): Promise<LeadActivity | undefined> {
+    const [activity] = await db.select().from(leadActivities).where(eq(leadActivities.id, id));
+    return activity;
+  }
+
   async createLeadActivity(activity: InsertLeadActivity): Promise<LeadActivity> {
     const [newActivity] = await db.insert(leadActivities).values(activity).returning();
     return newActivity;
+  }
+
+  async updateLeadActivity(id: string, activity: Partial<InsertLeadActivity>): Promise<LeadActivity | undefined> {
+    const [updated] = await db.update(leadActivities)
+      .set(activity)
+      .where(eq(leadActivities.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteLeadActivity(id: string): Promise<boolean> {
+    await db.delete(leadActivities).where(eq(leadActivities.id, id));
+    return true;
+  }
+
+  async getTasksByActivityId(activityId: string): Promise<LeadTask[]> {
+    return db.select().from(leadTasks)
+      .where(eq(leadTasks.sourceActivityId, activityId))
+      .orderBy(desc(leadTasks.createdAt));
   }
 
   // Lead Tasks
