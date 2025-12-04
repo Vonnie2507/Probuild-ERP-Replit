@@ -457,13 +457,60 @@ export type JobSetupSection5Install = {
 };
 
 // ============================================
+// LIVE DOCUMENT TEMPLATES
+// ============================================
+
+// Template section configuration type
+export type TemplateSectionConfig = {
+  title?: string;
+  description?: string;
+  enabledFields?: string[];
+  defaultValues?: Record<string, unknown>;
+  requiredBeforeComplete?: string[];
+};
+
+// Live Document Templates - reusable templates for job setup documents
+export const liveDocumentTemplates = pgTable("live_document_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  isDefault: boolean("is_default").default(false),
+  isActive: boolean("is_active").default(true),
+  
+  // Section configurations (customize which fields are shown/required)
+  section1Config: jsonb("section1_config").$type<TemplateSectionConfig>(),
+  section2Config: jsonb("section2_config").$type<TemplateSectionConfig>(),
+  section3Config: jsonb("section3_config").$type<TemplateSectionConfig>(),
+  section4Config: jsonb("section4_config").$type<TemplateSectionConfig>(),
+  section5Config: jsonb("section5_config").$type<TemplateSectionConfig>(),
+  
+  // Default values for new documents
+  section1Defaults: jsonb("section1_defaults").$type<JobSetupSection1Sales>(),
+  section2Defaults: jsonb("section2_defaults").$type<JobSetupSection2ProductsMeta>(),
+  section3Defaults: jsonb("section3_defaults").$type<JobSetupSection3Production>(),
+  section4Defaults: jsonb("section4_defaults").$type<JobSetupSection4Schedule>(),
+  section5Defaults: jsonb("section5_defaults").$type<JobSetupSection5Install>(),
+  
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertLiveDocumentTemplateSchema = createInsertSchema(liveDocumentTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertLiveDocumentTemplate = z.infer<typeof insertLiveDocumentTemplateSchema>;
+export type LiveDocumentTemplate = typeof liveDocumentTemplates.$inferSelect;
+
+// ============================================
 // JOB SETUP DOCUMENT TABLES
 // ============================================
 
-// Job Setup Documents - main document table
+// Job Setup Documents - main document table (now supports lead-level documents too)
 export const jobSetupDocuments = pgTable("job_setup_documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  jobId: varchar("job_id").references(() => jobs.id).notNull().unique(),
+  // Can be linked to either a job OR a lead (one must be set)
+  jobId: varchar("job_id").references(() => jobs.id).unique(),
+  leadId: varchar("lead_id").references(() => leads.id),
+  templateId: varchar("template_id").references(() => liveDocumentTemplates.id),
   jobType: jobTypeEnum("job_type").notNull(),
   status: jobSetupStatusEnum("status").notNull().default("draft"),
   
