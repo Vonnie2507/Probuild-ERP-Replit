@@ -1,0 +1,162 @@
+11. CALL LOG & TRANSCRIPTION – CLEAR, READABLE ACTIVITY ENTRIES
+
+Upgrade the Activity system on the Lead so it supports a proper Call Log with:
+	•	Clear visual layout
+	•	Direction (staff → client vs client → Probuild)
+	•	Who handled the call
+	•	Date & time (top-right)
+	•	Duration
+	•	AI summary of the call
+	•	Collapsible full transcription + audio playback
+	•	Ability to create Tasks directly from the call entry
+
+All of this must be visible in the Activity tab on the Lead Card, and persist when the Lead becomes a Job.
+
+⸻
+
+11.1 Data Model (Call Activity Fields)
+
+Extend the Activity model for call-type entries with:
+	•	activity_type = "call"
+	•	call_direction (enum: outbound_staff_to_client, inbound_client_to_probuild)
+	•	call_timestamp (datetime – when the call started)
+	•	call_duration_seconds (integer)
+	•	staff_member_id (which staff member handled the call)
+	•	logged_by_user_id (who logged the call, if different)
+	•	call_notes (short editable notes)
+	•	audio_recording_url (optional, for playback)
+	•	ai_summary_text (short AI-generated summary)
+	•	call_transcription_text (full transcript)
+	•	transcription_status (pending / completed / failed)
+
+Each call Activity must also be linked to any Tasks created from it (see 11.4).
+
+⸻
+
+11.2 Call Log UI – Layout & Clarity
+
+In the Activity tab of a Lead Card, each call entry must be visually clear and not cramped.
+
+Call entry layout:
+	•	Top row:
+	•	Left:
+	•	Icon + direction label, e.g.:
+	•	📞 Staff → Client for outbound
+	•	📞 Client → Probuild for inbound
+	•	Staff member name:
+	•	Handled by: [Staff Name]
+	•	Right (top-right corner):
+	•	Date and time of call, formatted clearly
+	•	e.g. Wed 4 Dec 2025 · 9:22am
+	•	Duration, e.g. 2 min 45 sec
+	•	Second row (main body):
+	•	Short AI Summary of the call in plain language, e.g.:
+“Client asked about moving the install date to next week and requested confirmation on gate height and colour.”
+	•	Below summary:
+	•	A clearly labeled button or toggle:
+	•	▼ View full call details / ▲ Hide call details
+
+When the user clicks View full call details, a collapsible panel opens.
+
+⸻
+
+11.3 Expanded Call Details (Collapsible Panel)
+
+Inside the expanded view for a call:
+	1.	Full Transcription Section
+	•	Label: Full transcription
+	•	Display the full call_transcription_text in a scrollable area.
+	•	If transcription is not available:
+	•	Show a message like:
+“Transcription not available yet. You can use call notes above.”
+	2.	Audio Playback
+	•	If audio_recording_url exists:
+	•	Show a basic audio player (play/pause, scrub bar).
+	•	Label: Play call recording
+	•	If no recording:
+	•	Hide player or show: “No recording available.”
+	3.	Manual Notes
+	•	A text area for call_notes:
+	•	Editable by staff (with usual permissions).
+	•	For additional context beyond the AI summary and transcription.
+
+All sections must have clear spacing and labels so the content is not crammed together.
+
+⸻
+
+11.4 Tasks & Follow-ups Created From Call
+
+From within the call log entry (either in collapsed or expanded view), staff must be able to:
+	•	Click a button: “Add follow-up task” or similar.
+	•	This opens a simple task form linked to:
+	•	The Lead
+	•	The specific call Activity
+
+Task fields:
+	•	Title (e.g. “Send revised quote Q2” / “Confirm install date”)
+	•	Due date
+	•	Assigned staff member
+	•	Optional notes
+
+After a Task is created:
+	•	The call entry should show a small area e.g.:
+	•	Tasks from this call:
+	•	• Follow up with client on colour choice – Due Fri 6 Dec – Assigned to Ayesha
+	•	Clicking a task opens/edit it in the Task system.
+
+This ensures follow-up actions from calls are visible and tied back to that specific conversation.
+
+⸻
+
+11.5 Editing & Deleting Call Logs
+
+Users must be able to:
+	•	Edit a call entry:
+	•	call_notes
+	•	staff_member_id
+	•	(optionally) call direction, if it was logged incorrectly
+	•	Delete a call entry:
+	•	Only allowed for:
+	•	Admin/Owner
+	•	Manager-level role
+	•	Or the user who originally created the log
+	•	Deletion requires confirmation:
+	•	“Are you sure you want to delete this call log? This will remove it from the Lead’s history.”
+
+When deleted, any linked Tasks should remain, but keep their relation to the Lead; the link to the call can either be cleared or noted as “Call log deleted.”
+
+⸻
+
+11.6 Future Integration – AI Transcription Flow (RingCentral/Twilio)
+
+The system must be structured so later we can plug in AI transcription from RingCentral, Twilio, or other providers.
+
+Expected future behaviour (do not fully implement integrations now, just design for it):
+	•	Calls made or received through the phone system are associated with:
+	•	Lead
+	•	call_timestamp
+	•	audio_recording_url
+	•	A background process or webhook generates call_transcription_text and ai_summary_text, and updates:
+	•	transcription_status = completed
+	•	When transcription arrives:
+	•	The call entry in the Activity tab automatically updates to show:
+	•	AI summary (if not manually overridden)
+	•	Full transcription in the expanded panel.
+
+Manual call logging must still be possible even without this integration.
+
+⸻
+
+11.7 Persistence Into Job History
+
+When a Lead converts into a Job:
+	•	All Activity entries (including call logs, summaries, tasks) must remain visible under the Job’s history or combined Lead+Job timeline.
+	•	Call logs should still show:
+	•	Direction
+	•	Who handled it
+	•	Date/time
+	•	Duration
+	•	Summary
+	•	Tasks created
+
+This gives Scheduler, Production, and Installers full context about earlier conversations.

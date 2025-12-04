@@ -1,0 +1,78 @@
+11. CALL LOG & TRANSCRIPTION REQUIREMENTS (Activity System Upgrade)
+
+You must upgrade the Activity system for Leads to support a proper Call Log with editing, deletion, attribution, and future AI transcription integration.
+
+11.1 Call Log Fields
+
+Create or extend the Activity model with call-specific fields:
+	•	activity_type = "call"
+	•	call_direction (incoming / outgoing)
+	•	call_timestamp
+	•	call_duration_seconds (optional)
+	•	call_notes (editable text)
+	•	recorded_by_user_id (who logged the call)
+	•	call_taken_by_user_id (who actually took the call, if different)
+	•	audio_recording_url (optional future field)
+	•	call_transcription_text (AI-generated text from call recordings)
+	•	transcription_status (pending / completed / failed)
+
+These must all display clearly in the Activity tab inside the Lead Card.
+
+⸻
+
+11.2 Editing and Deleting Call Logs
+
+Users must be able to:
+	•	Click into a call log entry
+	•	Edit:
+	•	notes
+	•	attribution (who took/made the call)
+	•	timestamps (optional, depending on permissions)
+	•	Delete a call log if created by mistake
+
+Deletion rules:
+	•	Only:
+	•	Admin
+	•	Manager
+	•	Or the user who created the log
+can delete a call record.
+	•	Deletion must require a confirmation step:
+“Are you sure you want to delete this call log?”
+
+This prevents corrupted CRM activity and keeps the logs clean.
+
+⸻
+
+11.3 Future Support: AI Call Transcription (RingCentral / Twilio / Other)
+
+Set the system up so later we can integrate automated call transcription via:
+	•	RingCentral API (current provider)
+	•	or Twilio Voice
+	•	or any other VoIP provider
+
+Design the backend model and Activity UI so that:
+	1.	If a transcription exists:
+	•	Show the call notes, then below it, show the transcription text.
+	•	Allow staff to add their own notes in addition to the transcription.
+	2.	If transcription is pending:
+	•	Show a placeholder:
+“Transcription processing…”
+	3.	If transcription fails:
+	•	Show a fallback:
+“Unable to transcribe call. You may add manual notes.”
+
+This MUST NOT block normal call logging — manual call logs must still work even without integration.
+
+⸻
+
+11.4 Display Requirements in Lead Card
+
+Inside each Lead card, in the Activity tab:
+	•	Call logs must appear chronologically with icons indicating:
+	•	Incoming call
+	•	Outgoing call
+	•	Call duration (if available)
+	•	Who took the call
+	•	Who logged it
+
+Example display:

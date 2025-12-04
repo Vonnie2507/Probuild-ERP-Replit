@@ -202,6 +202,21 @@ export const leadTaskPriorityEnum = pgEnum("lead_task_priority", [
   "urgent"
 ]);
 
+// Call direction enum for call logs
+export const callDirectionEnum = pgEnum("call_direction", [
+  "outbound_staff_to_client",
+  "inbound_client_to_probuild"
+]);
+
+// Transcription status enum for call logs
+export const transcriptionStatusEnum = pgEnum("transcription_status", [
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+  "not_applicable"
+]);
+
 // Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -262,6 +277,17 @@ export const leadActivities = pgTable("lead_activities", {
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  
+  // Call-specific fields (used when activityType is call_logged/call_missed/call_scheduled)
+  callDirection: callDirectionEnum("call_direction"),
+  callTimestamp: timestamp("call_timestamp"),
+  callDurationSeconds: integer("call_duration_seconds"),
+  staffMemberId: varchar("staff_member_id").references(() => users.id),
+  callNotes: text("call_notes"),
+  audioRecordingUrl: text("audio_recording_url"),
+  aiSummaryText: text("ai_summary_text"),
+  callTranscriptionText: text("call_transcription_text"),
+  transcriptionStatus: transcriptionStatusEnum("transcription_status").default("not_applicable"),
 });
 
 // Lead Tasks table - follow-up reminders and tasks for leads
@@ -279,6 +305,8 @@ export const leadTasks = pgTable("lead_tasks", {
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  // Link task back to a specific activity (e.g., task created from a call log)
+  sourceActivityId: varchar("source_activity_id").references(() => leadActivities.id),
 });
 
 // Fence Styles table
