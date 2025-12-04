@@ -14,10 +14,30 @@ import {
   CheckCircle2, Clock, AlertCircle, Bell, Calendar, Cloud, Sun, CloudRain,
   Thermometer, Umbrella, FileText, Phone, Briefcase, Users, TrendingUp,
   CalendarCheck, Target, ExternalLink, Plus, Package, Truck, ClipboardList,
-  Hammer, Settings, BarChart3, UserPlus, Boxes, Wrench
+  Hammer, Settings, BarChart3, UserPlus, Boxes, Wrench, LayoutDashboard,
+  Gauge, LineChart, PieChart, Table, ListChecks
 } from "lucide-react";
-import type { LeadTask, Notification, StaffLeaveBalance } from "@shared/schema";
+import type { LeadTask, Notification, StaffLeaveBalance, DashboardWidget } from "@shared/schema";
 import { formatDistanceToNow, isToday, isBefore, addDays, format } from "date-fns";
+
+interface CustomLayoutWidget {
+  id: string;
+  widgetId: string;
+  positionX: number;
+  positionY: number;
+  width: number;
+  height: number;
+  config: Record<string, any> | null;
+  widget?: DashboardWidget;
+}
+
+interface CustomLayout {
+  id: string;
+  name: string;
+  role: string;
+  isPublished: boolean;
+  instances: CustomLayoutWidget[];
+}
 
 interface KpiItem {
   label: string;
@@ -622,12 +642,121 @@ function KPIsWidget({ kpis }: { kpis: KpiItem[] }) {
   );
 }
 
+const WIDGET_ICONS: Record<string, typeof BarChart3> = {
+  "bar_chart": BarChart3,
+  "line_chart": LineChart,
+  "pie_chart": PieChart,
+  "table": Table,
+  "kpi": Gauge,
+  "list": ListChecks,
+};
+
+function CustomWidgetRenderer({ 
+  widget, 
+  dashboardData 
+}: { 
+  widget: CustomLayoutWidget; 
+  dashboardData: DashboardData | undefined;
+}) {
+  const widgetInfo = widget.widget;
+  if (!widgetInfo) {
+    return (
+      <Card className="h-full">
+        <CardContent className="flex items-center justify-center h-full min-h-[120px]">
+          <p className="text-muted-foreground">Widget not found</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const Icon = WIDGET_ICONS[widgetInfo.widgetType] || LayoutDashboard;
+
+  switch (widgetInfo.componentKey) {
+    case "tasks_widget":
+      return <TasksWidget tasks={dashboardData?.tasks || []} />;
+    case "notifications_widget":
+      return <NotificationsWidget notifications={dashboardData?.notifications || []} />;
+    case "kpis_widget":
+      return <KPIsWidget kpis={dashboardData?.kpis || []} />;
+    case "weather_widget":
+      return <WeatherWidget />;
+    case "leave_balance_widget":
+      return <LeaveBalanceWidget leaveBalance={dashboardData?.leaveBalance || { annualLeaveBalanceHours: "0", sickLeaveBalanceHours: "0" }} />;
+    default:
+      return (
+        <Card data-testid={`custom-widget-${widget.id}`}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Icon className="h-4 w-4" />
+              {widgetInfo.name}
+            </CardTitle>
+            <CardDescription>{widgetInfo.description}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <div className="text-center">
+                <Icon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Widget preview coming soon</p>
+                <p className="text-xs mt-1">Type: {widgetInfo.widgetType}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      );
+  }
+}
+
+function CustomDashboardLayout({ 
+  layout, 
+  dashboardData 
+}: { 
+  layout: CustomLayout; 
+  dashboardData: DashboardData | undefined;
+}) {
+  const sortedInstances = [...layout.instances].sort((a, b) => a.positionY - b.positionY);
+
+  return (
+    <div className="space-y-4" data-testid="custom-dashboard-layout">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+        <LayoutDashboard className="h-4 w-4" />
+        <span>Custom Layout: {layout.name}</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {sortedInstances.map((instance) => (
+          <div 
+            key={instance.id} 
+            className={`${instance.width >= 2 ? 'md:col-span-2' : ''} ${instance.width >= 3 ? 'lg:col-span-3' : ''}`}
+          >
+            <CustomWidgetRenderer widget={instance} dashboardData={dashboardData} />
+          </div>
+        ))}
+      </div>
+      {sortedInstances.length === 0 && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <LayoutDashboard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No widgets configured</h3>
+            <p className="text-muted-foreground">
+              This dashboard layout has no widgets. Ask an admin to add widgets in the Dashboard Builder.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function MyDashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
 
   const { data: dashboardData, isLoading } = useQuery<DashboardData>({
     queryKey: ["/api/my-dashboard"],
+    enabled: !!user,
+  });
+
+  const { data: customLayout, isLoading: layoutLoading } = useQuery<CustomLayout | null>({
+    queryKey: ["/api/dashboard/my-layout"],
     enabled: !!user,
   });
 
@@ -638,7 +767,7 @@ export default function MyDashboard() {
     year: "numeric",
   });
 
-  if (isLoading) {
+  if (isLoading || layoutLoading) {
     return (
       <div className="p-6 space-y-6">
         <Skeleton className="h-24 w-full" />
@@ -663,6 +792,8 @@ export default function MyDashboard() {
   const leaveBalance = dashboardData?.leaveBalance || { annualLeaveBalanceHours: "0", sickLeaveBalanceHours: "0" };
   const kpis = dashboardData?.kpis || [];
 
+  const hasCustomLayout = customLayout && customLayout.instances && customLayout.instances.length > 0;
+
   return (
     <div className="p-6 space-y-6" data-testid="page-my-dashboard">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -677,17 +808,21 @@ export default function MyDashboard() {
         <RoleQuickActions role={displayUser?.role || "staff"} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <TasksWidget tasks={tasks} />
-          <NotificationsWidget notifications={notifications} />
+      {hasCustomLayout ? (
+        <CustomDashboardLayout layout={customLayout} dashboardData={dashboardData} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <TasksWidget tasks={tasks} />
+            <NotificationsWidget notifications={notifications} />
+          </div>
+          <div className="space-y-6">
+            <KPIsWidget kpis={kpis} />
+            <WeatherWidget />
+            <LeaveBalanceWidget leaveBalance={leaveBalance} />
+          </div>
         </div>
-        <div className="space-y-6">
-          <KPIsWidget kpis={kpis} />
-          <WeatherWidget />
-          <LeaveBalanceWidget leaveBalance={leaveBalance} />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
