@@ -159,6 +159,18 @@ The numbering logic uses integer-based MAX calculations instead of lexicographic
   - Active/Paused toggle for campaigns
   - Campaign enrollments tracking
   - API endpoints: `/api/automation-campaigns`, `/api/campaign-enrollments`
+- **P&L Calculator** (NEW):
+  - Staff-only comprehensive job costing analysis accessible from Quote detail dialog
+  - Tabbed interface: "Quote Details" and "P&L Analysis" tabs in quote dialog
+  - Real-time profit calculations with margin warnings (< 20% target)
+  - Cost components tracking: materials, manufacturing labour, install labour, travel, admin, supplier fees, third party, ground conditions
+  - Trip tracking: site_quote, post_install, panel_install, gate_install, welder_dropoff/pickup, powder_coat_dropoff/pickup, supplier_delivery, follow_up, warranty
+  - Admin time tracking per staff member with hourly rate calculations
+  - Activity types: quote_creation, client_messaging, client_call, spec_gathering, scheduling, invoicing, follow_up, general_admin
+  - Collapsible cost sections with add/delete functionality
+  - Recalculate button for refreshing P&L summary
+  - API endpoints: `/api/quotes/:id/costs`, `/api/quotes/:id/trips`, `/api/quotes/:id/admin-time`, `/api/quotes/:id/pl-summary`
+  - Database tables: quote_cost_components, quote_trips, quote_admin_time, quote_ground_conditions, travel_sessions, quote_pl_summary, staff_rate_cards
 
 ## Development Notes
 - All pages connected to real backend APIs

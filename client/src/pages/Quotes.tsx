@@ -20,6 +20,7 @@ import {
   Plus,
   ArrowUpDown,
   ChevronDown,
+  Calculator,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,8 +56,10 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { QuotePLPanel } from "@/components/pl/QuotePLPanel";
 import type { Quote, Client, Lead } from "@shared/schema";
 
 type QuoteStatus = "draft" | "sent" | "approved" | "rejected" | "expired";
@@ -532,7 +535,7 @@ export default function Quotes() {
       </Card>
 
       <Dialog open={!!selectedQuote} onOpenChange={() => setSelectedQuote(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               <span className="font-mono">{selectedQuote?.quoteNumber}</span>
@@ -544,58 +547,70 @@ export default function Quotes() {
             </DialogTitle>
           </DialogHeader>
           {selectedQuote && (
-            <ScrollArea className="max-h-[60vh]">
-              <div className="space-y-6 pr-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Client
+            <Tabs defaultValue="details" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="details" data-testid="tab-quote-details">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Quote Details
+                </TabsTrigger>
+                <TabsTrigger value="pl" data-testid="tab-quote-pl">
+                  <Calculator className="h-4 w-4 mr-2" />
+                  P&L Analysis
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="details">
+                <ScrollArea className="max-h-[55vh]">
+                  <div className="space-y-6 pr-4 pt-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <div className="text-sm text-muted-foreground flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          Client
+                        </div>
+                        <div className="font-medium" data-testid="dialog-client-name">{getClientName(selectedQuote.clientId)}</div>
+                      </div>
+                      {selectedQuote.leadId && (
+                        <div className="space-y-1">
+                          <div className="text-sm text-muted-foreground flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            Lead
+                          </div>
+                          <div className="font-mono" data-testid="dialog-lead-number">
+                            {getLeadNumber(selectedQuote.leadId)}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="font-medium" data-testid="dialog-client-name">{getClientName(selectedQuote.clientId)}</div>
-                  </div>
-                  {selectedQuote.leadId && (
+
                     <div className="space-y-1">
                       <div className="text-sm text-muted-foreground flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        Lead
+                        <MapPin className="h-4 w-4" />
+                        Site Address
                       </div>
-                      <div className="font-mono" data-testid="dialog-lead-number">
-                        {getLeadNumber(selectedQuote.leadId)}
+                      <div data-testid="dialog-address">{selectedQuote.siteAddress}</div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <div className="text-sm text-muted-foreground">Fence Details</div>
+                        <div>
+                          {selectedQuote.totalLength}m × {selectedQuote.fenceHeight}mm
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-sm text-muted-foreground">Quote Type</div>
+                        <Badge variant={selectedQuote.isTradeQuote ? "secondary" : "outline"}>
+                          {selectedQuote.isTradeQuote ? "Trade Quote" : "Public Quote"}
+                        </Badge>
+                        {selectedQuote.isTradeQuote && selectedQuote.tradeDiscount && (
+                          <span className="ml-2 text-sm text-green-600">
+                            ({selectedQuote.tradeDiscount}% discount)
+                          </span>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Site Address
-                  </div>
-                  <div data-testid="dialog-address">{selectedQuote.siteAddress}</div>
-                </div>
-
-                <Separator />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Fence Details</div>
-                    <div>
-                      {selectedQuote.totalLength}m × {selectedQuote.fenceHeight}mm
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Quote Type</div>
-                    <Badge variant={selectedQuote.isTradeQuote ? "secondary" : "outline"}>
-                      {selectedQuote.isTradeQuote ? "Trade Quote" : "Public Quote"}
-                    </Badge>
-                    {selectedQuote.isTradeQuote && selectedQuote.tradeDiscount && (
-                      <span className="ml-2 text-sm text-green-600">
-                        ({selectedQuote.tradeDiscount}% discount)
-                      </span>
-                    )}
-                  </div>
-                </div>
 
                 {selectedQuote.lineItems && Array.isArray(selectedQuote.lineItems) && (
                   <>
@@ -691,37 +706,49 @@ export default function Quotes() {
                   )}
                 </div>
 
-                <div className="flex gap-2 pt-4">
-                  {selectedQuote.status === "draft" && (
-                    <Button
-                      onClick={() => {
-                        sendQuoteMutation.mutate(selectedQuote.id);
-                        setSelectedQuote(null);
-                      }}
-                      data-testid="button-send-quote"
-                    >
-                      <Send className="h-4 w-4 mr-2" />
-                      Send Quote
-                    </Button>
-                  )}
-                  {selectedQuote.status === "sent" && (
-                    <Button
-                      onClick={() => {
-                        approveQuoteMutation.mutate(selectedQuote.id);
-                        setSelectedQuote(null);
-                      }}
-                      data-testid="button-approve-quote"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Mark Approved
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={() => setSelectedQuote(null)}>
-                    Close
-                  </Button>
-                </div>
-              </div>
-            </ScrollArea>
+                    <div className="flex gap-2 pt-4">
+                      {selectedQuote.status === "draft" && (
+                        <Button
+                          onClick={() => {
+                            sendQuoteMutation.mutate(selectedQuote.id);
+                            setSelectedQuote(null);
+                          }}
+                          data-testid="button-send-quote"
+                        >
+                          <Send className="h-4 w-4 mr-2" />
+                          Send Quote
+                        </Button>
+                      )}
+                      {selectedQuote.status === "sent" && (
+                        <Button
+                          onClick={() => {
+                            approveQuoteMutation.mutate(selectedQuote.id);
+                            setSelectedQuote(null);
+                          }}
+                          data-testid="button-approve-quote"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Mark Approved
+                        </Button>
+                      )}
+                      <Button variant="outline" onClick={() => setSelectedQuote(null)}>
+                        Close
+                      </Button>
+                    </div>
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+              <TabsContent value="pl">
+                <ScrollArea className="max-h-[55vh]">
+                  <div className="pt-4 pr-4">
+                    <QuotePLPanel 
+                      quoteId={selectedQuote.id} 
+                      quoteTotalAmount={selectedQuote.totalAmount} 
+                    />
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
           )}
         </DialogContent>
       </Dialog>
