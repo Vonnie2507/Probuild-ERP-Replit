@@ -98,6 +98,7 @@ export function LeadDetailDialog({
   const [callDuration, setCallDuration] = useState<string>("");
   const [callNotes, setCallNotes] = useState("");
   const [linkingTaskToCallId, setLinkingTaskToCallId] = useState<string | null>(null);
+  const [newTaskAssignee, setNewTaskAssignee] = useState<string>("");
 
   const { data: activities = [] } = useQuery<LeadActivity[]>({
     queryKey: ["/api/leads", lead?.id, "activities"],
@@ -135,13 +136,15 @@ export function LeadDetailDialog({
   });
 
   const addTaskMutation = useMutation({
-    mutationFn: async (data: { title: string; priority: string }) => {
+    mutationFn: async (data: { title: string; priority: string; assignedTo?: string }) => {
       return apiRequest("POST", `/api/leads/${lead?.id}/tasks`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-dashboard"] });
       setNewTaskTitle("");
       setNewTaskPriority("medium");
+      setNewTaskAssignee("");
       toast({ title: "Task added successfully" });
     },
     onError: (error) => {
@@ -189,16 +192,18 @@ export function LeadDetailDialog({
   });
 
   const addTaskWithCallLinkMutation = useMutation({
-    mutationFn: async (data: { title: string; priority: string; sourceActivityId?: string }) => {
+    mutationFn: async (data: { title: string; priority: string; sourceActivityId?: string; assignedTo?: string }) => {
       return apiRequest("POST", `/api/leads/${lead?.id}/tasks`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-dashboard"] });
       if (linkingTaskToCallId) {
         queryClient.invalidateQueries({ queryKey: ["/api/lead-activities", linkingTaskToCallId, "tasks"] });
       }
       setNewTaskTitle("");
       setNewTaskPriority("medium");
+      setNewTaskAssignee("");
       setLinkingTaskToCallId(null);
       toast({ title: "Task created from call" });
     },
@@ -222,6 +227,7 @@ export function LeadDetailDialog({
     addTaskMutation.mutate({
       title: newTaskTitle.trim(),
       priority: newTaskPriority,
+      assignedTo: newTaskAssignee && newTaskAssignee !== "unassigned" ? newTaskAssignee : undefined,
     });
   };
 
@@ -250,6 +256,7 @@ export function LeadDetailDialog({
       title: newTaskTitle.trim(),
       priority: newTaskPriority,
       sourceActivityId: linkingTaskToCallId || undefined,
+      assignedTo: newTaskAssignee && newTaskAssignee !== "unassigned" ? newTaskAssignee : undefined,
     });
   };
 
@@ -559,7 +566,7 @@ export function LeadDetailDialog({
                       onChange={(e) => setNewTaskTitle(e.target.value)}
                       data-testid="input-task-from-call"
                     />
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
                         <SelectTrigger className="w-[120px]">
                           <SelectValue />
@@ -571,6 +578,21 @@ export function LeadDetailDialog({
                           <SelectItem value="urgent">Urgent</SelectItem>
                         </SelectContent>
                       </Select>
+                      <Select value={newTaskAssignee} onValueChange={setNewTaskAssignee}>
+                        <SelectTrigger className="w-[160px]" data-testid="select-task-assignee-call">
+                          <SelectValue placeholder="Assign to..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {users.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.firstName} {user.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex gap-2">
                       <Button 
                         size="sm" 
                         onClick={handleSubmitTaskFromCall}
@@ -582,7 +604,10 @@ export function LeadDetailDialog({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setLinkingTaskToCallId(null)}
+                        onClick={() => {
+                          setLinkingTaskToCallId(null);
+                          setNewTaskAssignee("");
+                        }}
                       >
                         Cancel
                       </Button>
@@ -632,7 +657,7 @@ export function LeadDetailDialog({
                       onChange={(e) => setNewTaskTitle(e.target.value)}
                       data-testid="input-new-task"
                     />
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
                         <SelectTrigger className="w-[120px]" data-testid="select-task-priority">
                           <SelectValue />
@@ -644,15 +669,28 @@ export function LeadDetailDialog({
                           <SelectItem value="urgent">Urgent</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button 
-                        size="sm" 
-                        onClick={handleAddTask}
-                        disabled={!newTaskTitle.trim() || addTaskMutation.isPending}
-                        data-testid="button-add-task"
-                      >
-                        Add Task
-                      </Button>
+                      <Select value={newTaskAssignee} onValueChange={setNewTaskAssignee}>
+                        <SelectTrigger className="w-[160px]" data-testid="select-task-assignee">
+                          <SelectValue placeholder="Assign to..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {users.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.firstName} {user.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
+                    <Button 
+                      size="sm" 
+                      onClick={handleAddTask}
+                      disabled={!newTaskTitle.trim() || addTaskMutation.isPending}
+                      data-testid="button-add-task"
+                    >
+                      Add Task
+                    </Button>
                   </CardContent>
                 </Card>
               </div>
@@ -664,37 +702,48 @@ export function LeadDetailDialog({
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
-                      {tasks.map((task) => (
-                        <div
-                          key={task.id}
-                          className="flex items-center justify-between p-2 border rounded-lg"
-                          data-testid={`task-item-${task.id}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => updateTaskMutation.mutate({
-                                id: task.id,
-                                status: task.status === "completed" ? "pending" : "completed"
-                              })}
-                            >
-                              {task.status === "completed" ? (
-                                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                              ) : (
-                                <CircleDashed className="h-4 w-4 text-muted-foreground" />
-                              )}
-                            </Button>
-                            <span className={task.status === "completed" ? "line-through text-muted-foreground" : ""}>
-                              {task.title}
-                            </span>
+                      {tasks.map((task) => {
+                        const assignee = task.assignedTo ? users.find(u => u.id === task.assignedTo) : null;
+                        return (
+                          <div
+                            key={task.id}
+                            className="flex items-center justify-between p-2 border rounded-lg"
+                            data-testid={`task-item-${task.id}`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => updateTaskMutation.mutate({
+                                  id: task.id,
+                                  status: task.status === "completed" ? "pending" : "completed"
+                                })}
+                              >
+                                {task.status === "completed" ? (
+                                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                ) : (
+                                  <CircleDashed className="h-4 w-4 text-muted-foreground" />
+                                )}
+                              </Button>
+                              <div className="flex flex-col">
+                                <span className={task.status === "completed" ? "line-through text-muted-foreground" : ""}>
+                                  {task.title}
+                                </span>
+                                {assignee && (
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <User className="h-3 w-3" />
+                                    {assignee.firstName} {assignee.lastName}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <Badge className={priorityColors[task.priority || "medium"]}>
+                              {task.priority}
+                            </Badge>
                           </div>
-                          <Badge className={priorityColors[task.priority || "medium"]}>
-                            {task.priority}
-                          </Badge>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>

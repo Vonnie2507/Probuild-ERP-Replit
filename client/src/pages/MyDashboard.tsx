@@ -209,17 +209,19 @@ function TasksWidget({ tasks }: { tasks: LeadTask[] }) {
   });
 
   const now = new Date();
-  const overdueTasks = tasks.filter(t => 
-    t.dueDate && isBefore(new Date(t.dueDate), now) && t.status !== "completed"
+  const activeTasks = tasks.filter(t => t.status !== "completed");
+  const overdueTasks = activeTasks.filter(t => 
+    t.dueDate && isBefore(new Date(t.dueDate), now)
   );
-  const todayTasks = tasks.filter(t => 
-    t.dueDate && isToday(new Date(t.dueDate)) && t.status !== "completed"
+  const todayTasks = activeTasks.filter(t => 
+    t.dueDate && isToday(new Date(t.dueDate))
   );
-  const upcomingTasks = tasks.filter(t => {
-    if (!t.dueDate || t.status === "completed") return false;
+  const upcomingTasks = activeTasks.filter(t => {
+    if (!t.dueDate) return false;
     const dueDate = new Date(t.dueDate);
     return !isBefore(dueDate, now) && !isToday(dueDate) && isBefore(dueDate, addDays(now, 7));
   });
+  const noDueDateTasks = activeTasks.filter(t => !t.dueDate);
 
   const handleToggleComplete = async (task: LeadTask) => {
     const newStatus = task.status === "completed" ? "pending" : "completed";
@@ -323,8 +325,20 @@ function TasksWidget({ tasks }: { tasks: LeadTask[] }) {
                 </div>
               </div>
             )}
+
+            {noDueDateTasks.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Other Tasks ({noDueDateTasks.length})
+                </h4>
+                <div className="space-y-2">
+                  {noDueDateTasks.slice(0, 10).map(renderTask)}
+                </div>
+              </div>
+            )}
             
-            {overdueTasks.length === 0 && todayTasks.length === 0 && upcomingTasks.length === 0 && (
+            {activeTasks.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No active tasks. Great job!
               </p>
