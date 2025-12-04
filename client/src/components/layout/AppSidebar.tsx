@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Users,
   FileText,
+  ClipboardList,
   Briefcase,
   Factory,
   Calendar,
@@ -34,7 +35,8 @@ import { Badge } from "@/components/ui/badge";
 
 const mainNavItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Leads & Quotes", url: "/leads", icon: FileText },
+  { title: "Leads", url: "/leads", icon: FileText },
+  { title: "Quotes", url: "/quotes", icon: ClipboardList },
   { title: "Jobs", url: "/jobs", icon: Briefcase },
   { title: "Clients", url: "/clients", icon: Users },
 ];

@@ -11,6 +11,7 @@ import { NewMessageBanner } from "@/components/layout/NewMessageBanner";
 
 import Dashboard from "@/pages/Dashboard";
 import Leads from "@/pages/Leads";
+import Quotes from "@/pages/Quotes";
 import Jobs from "@/pages/Jobs";
 import Clients from "@/pages/Clients";
 import Production from "@/pages/Production";
@@ -65,6 +66,11 @@ function Router() {
       <Route path="/leads">
         <MainLayout>
           <Leads />
+        </MainLayout>
+      </Route>
+      <Route path="/quotes">
+        <MainLayout>
+          <Quotes />
         </MainLayout>
       </Route>
       <Route path="/jobs">

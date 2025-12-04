@@ -94,7 +94,18 @@ Each lead can have multiple quotes, but only one job and one invoice per job. Th
 The numbering logic uses integer-based MAX calculations instead of lexicographic sorting to ensure correct sequencing beyond PVC-999.
 
 ## Recent Changes (December 2025)
-- **Hierarchical Numbering System** (NEW): Implemented linked numbering for leads, quotes, jobs, and invoices
+- **Quotes Page** (NEW): Added dedicated Quotes page accessible from sidebar
+  - Renamed sidebar "Leads & Quotes" to just "Leads" 
+  - New "Quotes" menu item in sidebar for focused quotes management
+  - Stats cards: Total Quotes, Approved, Total Value, Pending Value
+  - Searchable and filterable table view of all quotes
+  - Status filter (draft, sent, approved, rejected, expired)
+  - Type filter (public, trade)
+  - Sortable columns with click-to-sort headers
+  - CSV export functionality
+  - Quote detail dialog with full line items and pricing
+  - Quick actions: Send Quote, Mark Approved
+- **Hierarchical Numbering System**: Implemented linked numbering for leads, quotes, jobs, and invoices
   - Leads auto-generated as PVC-XXX format
   - Quotes linked to leads as PVC-XXX-Q# format (multiple per lead)
   - Jobs derived as PVC-XXX-JOB format
