@@ -1,6 +1,7 @@
 import { useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Users,
@@ -42,51 +43,97 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import type { UserRole } from "@/lib/permissions";
 
-const mainNavItems = [
-  { title: "My Dashboard", url: "/", icon: User },
-  { title: "Business Dashboard", url: "/business-dashboard", icon: TrendingUp },
-  { title: "Leads", url: "/leads", icon: FileText },
-  { title: "Quotes", url: "/quotes", icon: ClipboardList },
-  { title: "Jobs", url: "/jobs", icon: Briefcase },
-  { title: "Clients", url: "/clients", icon: Users },
-];
+interface NavItem {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+  roles: UserRole[];
+  badge?: "unread-messages";
+}
 
-const operationsItems = [
-  { title: "Production", url: "/production", icon: Factory },
-  { title: "Schedule", url: "/schedule", icon: Calendar },
-  { title: "Inventory", url: "/inventory", icon: Package },
-];
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+  roles: UserRole[];
+}
 
-const financeItems = [
-  { title: "Payments", url: "/payments", icon: CreditCard },
-  { title: "Messages", url: "/messages", icon: MessageSquare },
-];
+const allRoles: UserRole[] = ["admin", "sales", "scheduler", "production_manager", "warehouse", "installer", "trade_client"];
+const internalRoles: UserRole[] = ["admin", "sales", "scheduler", "production_manager", "warehouse", "installer"];
+const officeRoles: UserRole[] = ["admin", "sales", "scheduler", "production_manager"];
 
-const analyticsItems = [
-  { title: "Quote Analytics", url: "/quote-analytics", icon: BarChart3 },
-  { title: "Automation", url: "/automation", icon: Zap },
-  { title: "Import Data", url: "/import", icon: Upload },
-];
-
-const installerItems = [
-  { title: "Installer App", url: "/installer", icon: Wrench },
-];
-
-const tradeItems = [
-  { title: "Trade Portal", url: "/trade", icon: Building2 },
-];
-
-const liveDocsItems = [
-  { title: "Templates", url: "/live-doc-templates", icon: FileStack },
-];
-
-const organisationItems = [
-  { title: "Departments", url: "/organisation/departments", icon: Building },
-  { title: "Workflows & SOPs", url: "/organisation/workflows", icon: GitBranch },
-  { title: "Policies", url: "/organisation/policies", icon: Shield },
-  { title: "Resources", url: "/organisation/resources", icon: FolderOpen },
-  { title: "Knowledge Base", url: "/organisation/knowledge", icon: BookOpen },
+const navigationConfig: NavGroup[] = [
+  {
+    label: "Main",
+    roles: internalRoles,
+    items: [
+      { title: "My Dashboard", url: "/", icon: User, roles: internalRoles },
+      { title: "Business Dashboard", url: "/business-dashboard", icon: TrendingUp, roles: ["admin"] },
+      { title: "Leads", url: "/leads", icon: FileText, roles: ["admin", "sales"] },
+      { title: "Quotes", url: "/quotes", icon: ClipboardList, roles: ["admin", "sales"] },
+      { title: "Jobs", url: "/jobs", icon: Briefcase, roles: ["admin", "sales", "scheduler", "production_manager", "warehouse", "installer"] },
+      { title: "Clients", url: "/clients", icon: Users, roles: ["admin", "sales", "scheduler", "production_manager"] },
+    ],
+  },
+  {
+    label: "Operations",
+    roles: ["admin", "scheduler", "production_manager", "warehouse"],
+    items: [
+      { title: "Production", url: "/production", icon: Factory, roles: ["admin", "production_manager", "warehouse"] },
+      { title: "Schedule", url: "/schedule", icon: Calendar, roles: ["admin", "scheduler", "production_manager", "installer"] },
+      { title: "Inventory", url: "/inventory", icon: Package, roles: ["admin", "production_manager", "warehouse"] },
+    ],
+  },
+  {
+    label: "Finance",
+    roles: ["admin", "sales"],
+    items: [
+      { title: "Payments", url: "/payments", icon: CreditCard, roles: ["admin"] },
+      { title: "Messages", url: "/messages", icon: MessageSquare, roles: officeRoles, badge: "unread-messages" },
+    ],
+  },
+  {
+    label: "Analytics",
+    roles: ["admin"],
+    items: [
+      { title: "Quote Analytics", url: "/quote-analytics", icon: BarChart3, roles: ["admin", "sales"] },
+      { title: "Automation", url: "/automation", icon: Zap, roles: ["admin"] },
+      { title: "Import Data", url: "/import", icon: Upload, roles: ["admin"] },
+    ],
+  },
+  {
+    label: "Live Documents",
+    roles: ["admin", "sales", "scheduler", "production_manager"],
+    items: [
+      { title: "Templates", url: "/live-doc-templates", icon: FileStack, roles: ["admin", "sales", "scheduler", "production_manager"] },
+    ],
+  },
+  {
+    label: "Field",
+    roles: ["admin", "installer"],
+    items: [
+      { title: "Installer App", url: "/installer", icon: Wrench, roles: ["admin", "installer"] },
+    ],
+  },
+  {
+    label: "External",
+    roles: ["admin", "trade_client"],
+    items: [
+      { title: "Trade Portal", url: "/trade", icon: Building2, roles: ["admin", "trade_client"] },
+    ],
+  },
+  {
+    label: "Organisation",
+    roles: internalRoles,
+    items: [
+      { title: "Departments", url: "/organisation/departments", icon: Building, roles: ["admin"] },
+      { title: "Workflows & SOPs", url: "/organisation/workflows", icon: GitBranch, roles: internalRoles },
+      { title: "Policies", url: "/organisation/policies", icon: Shield, roles: internalRoles },
+      { title: "Resources", url: "/organisation/resources", icon: FolderOpen, roles: internalRoles },
+      { title: "Knowledge Base", url: "/organisation/knowledge", icon: BookOpen, roles: internalRoles },
+    ],
+  },
 ];
 
 function formatRoleDisplay(role: string): string {
@@ -144,8 +191,9 @@ function UserSection() {
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+  const userRole = (user?.role || "sales") as UserRole;
 
-  // Poll for unread message count every 30 seconds
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ['/api/sms/unread-count'],
     refetchInterval: 30000,
@@ -157,6 +205,12 @@ export function AppSidebar() {
     if (url === "/") return location === "/";
     return location.startsWith(url);
   };
+
+  const hasAccess = (roles: UserRole[]) => {
+    return roles.includes(userRole);
+  };
+
+  const visibleGroups = navigationConfig.filter(group => hasAccess(group.roles));
 
   return (
     <Sidebar>
@@ -173,158 +227,39 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Main</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {visibleGroups.map((group) => {
+          const visibleItems = group.items.filter(item => hasAccess(item.roles));
+          if (visibleItems.length === 0) return null;
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Operations</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {operationsItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Finance</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {financeItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                      {item.title === "Messages" && unreadCount > 0 && (
-                        <Badge 
-                          variant="destructive" 
-                          className="ml-auto h-5 min-w-5 px-1.5 text-xs"
-                          data-testid="badge-unread-messages"
-                        >
-                          {unreadCount > 99 ? '99+' : unreadCount}
-                        </Badge>
-                      )}
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Analytics</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {analyticsItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Live Documents</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {liveDocsItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Field</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {installerItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>External</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {tradeItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Organisation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {organisationItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+          return (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {visibleItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                        <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                          {item.badge === "unread-messages" && unreadCount > 0 && (
+                            <Badge 
+                              variant="destructive" 
+                              className="ml-auto h-5 min-w-5 px-1.5 text-xs"
+                              data-testid="badge-unread-messages"
+                            >
+                              {unreadCount > 99 ? '99+' : unreadCount}
+                            </Badge>
+                          )}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          );
+        })}
       </SidebarContent>
 
       <SidebarFooter className="p-4">
