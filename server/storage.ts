@@ -9,7 +9,7 @@ import {
   travelSessions, quoteGroundConditions, quotePLSummary,
   departments, workflows, workflowVersions, policies, policyVersions,
   policyAcknowledgements, resources, knowledgeArticles,
-  jobSetupDocuments, jobSetupProducts,
+  jobSetupDocuments, jobSetupProducts, liveDocumentTemplates,
   type User, type InsertUser,
   type Client, type InsertClient,
   type Lead, type InsertLead,
@@ -53,6 +53,7 @@ import {
   type JobSetupSection3Production,
   type JobSetupSection4Schedule,
   type JobSetupSection5Install,
+  type LiveDocumentTemplate, type InsertLiveDocumentTemplate,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -387,9 +388,19 @@ export interface IStorage {
   // JOB SETUP DOCUMENTS
   // ============================================
 
+  // Live Document Templates
+  getLiveDocumentTemplate(id: string): Promise<LiveDocumentTemplate | undefined>;
+  getLiveDocumentTemplates(): Promise<LiveDocumentTemplate[]>;
+  getActiveLiveDocumentTemplates(): Promise<LiveDocumentTemplate[]>;
+  getDefaultLiveDocumentTemplate(): Promise<LiveDocumentTemplate | undefined>;
+  createLiveDocumentTemplate(template: InsertLiveDocumentTemplate): Promise<LiveDocumentTemplate>;
+  updateLiveDocumentTemplate(id: string, template: Partial<InsertLiveDocumentTemplate>): Promise<LiveDocumentTemplate | undefined>;
+  deleteLiveDocumentTemplate(id: string): Promise<boolean>;
+
   // Job Setup Documents
   getJobSetupDocument(id: string): Promise<JobSetupDocument | undefined>;
   getJobSetupDocumentByJob(jobId: string): Promise<JobSetupDocument | undefined>;
+  getJobSetupDocumentByLead(leadId: string): Promise<JobSetupDocument | undefined>;
   getJobSetupDocuments(): Promise<JobSetupDocument[]>;
   getJobSetupDocumentsByStatus(status: string): Promise<JobSetupDocument[]>;
   createJobSetupDocument(document: InsertJobSetupDocument): Promise<JobSetupDocument>;
@@ -2138,6 +2149,60 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ============================================
+  // LIVE DOCUMENT TEMPLATES
+  // ============================================
+
+  async getLiveDocumentTemplate(id: string): Promise<LiveDocumentTemplate | undefined> {
+    const [template] = await db.select().from(liveDocumentTemplates).where(eq(liveDocumentTemplates.id, id));
+    return template;
+  }
+
+  async getLiveDocumentTemplates(): Promise<LiveDocumentTemplate[]> {
+    return db.select().from(liveDocumentTemplates).orderBy(desc(liveDocumentTemplates.createdAt));
+  }
+
+  async getActiveLiveDocumentTemplates(): Promise<LiveDocumentTemplate[]> {
+    return db.select().from(liveDocumentTemplates)
+      .where(eq(liveDocumentTemplates.isActive, true))
+      .orderBy(desc(liveDocumentTemplates.createdAt));
+  }
+
+  async getDefaultLiveDocumentTemplate(): Promise<LiveDocumentTemplate | undefined> {
+    const [template] = await db.select().from(liveDocumentTemplates)
+      .where(and(
+        eq(liveDocumentTemplates.isDefault, true),
+        eq(liveDocumentTemplates.isActive, true)
+      ));
+    return template;
+  }
+
+  async createLiveDocumentTemplate(template: InsertLiveDocumentTemplate): Promise<LiveDocumentTemplate> {
+    // If this template is being set as default, unset other defaults
+    if (template.isDefault) {
+      await db.update(liveDocumentTemplates).set({ isDefault: false });
+    }
+    const [created] = await db.insert(liveDocumentTemplates).values(template as any).returning();
+    return created;
+  }
+
+  async updateLiveDocumentTemplate(id: string, template: Partial<InsertLiveDocumentTemplate>): Promise<LiveDocumentTemplate | undefined> {
+    // If setting this as default, unset other defaults first
+    if (template.isDefault) {
+      await db.update(liveDocumentTemplates).set({ isDefault: false }).where(sql`id != ${id}`);
+    }
+    const [updated] = await db.update(liveDocumentTemplates)
+      .set({ ...template, updatedAt: new Date() } as any)
+      .where(eq(liveDocumentTemplates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteLiveDocumentTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(liveDocumentTemplates).where(eq(liveDocumentTemplates.id, id));
+    return true;
+  }
+
+  // ============================================
   // JOB SETUP DOCUMENTS
   // ============================================
 
@@ -2148,6 +2213,11 @@ export class DatabaseStorage implements IStorage {
 
   async getJobSetupDocumentByJob(jobId: string): Promise<JobSetupDocument | undefined> {
     const [document] = await db.select().from(jobSetupDocuments).where(eq(jobSetupDocuments.jobId, jobId));
+    return document;
+  }
+
+  async getJobSetupDocumentByLead(leadId: string): Promise<JobSetupDocument | undefined> {
+    const [document] = await db.select().from(jobSetupDocuments).where(eq(jobSetupDocuments.leadId, leadId));
     return document;
   }
 
