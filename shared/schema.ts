@@ -162,6 +162,46 @@ export const jobSetupProductCategoryEnum = pgEnum("job_setup_product_category", 
   "other"
 ]);
 
+// Lead activity type enum
+export const leadActivityTypeEnum = pgEnum("lead_activity_type", [
+  "call_logged",
+  "call_missed",
+  "call_scheduled",
+  "email_sent",
+  "email_received",
+  "sms_sent",
+  "note_added",
+  "quote_created",
+  "quote_sent",
+  "quote_approved",
+  "quote_declined",
+  "site_visit_scheduled",
+  "site_visit_completed",
+  "catalogue_sent",
+  "form_sent",
+  "lead_created",
+  "lead_updated",
+  "stage_changed",
+  "assigned_changed",
+  "converted_to_job"
+]);
+
+// Lead task status enum
+export const leadTaskStatusEnum = pgEnum("lead_task_status", [
+  "pending",
+  "in_progress",
+  "completed",
+  "cancelled"
+]);
+
+// Lead task priority enum
+export const leadTaskPriorityEnum = pgEnum("lead_task_priority", [
+  "low",
+  "medium",
+  "high",
+  "urgent"
+]);
+
 // Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -208,6 +248,35 @@ export const leads = pgTable("leads", {
   assignedTo: varchar("assigned_to").references(() => users.id),
   followUpDate: timestamp("follow_up_date"),
   notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Lead Activities table - activity log for leads
+export const leadActivities = pgTable("lead_activities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => leads.id).notNull(),
+  activityType: leadActivityTypeEnum("activity_type").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Lead Tasks table - follow-up reminders and tasks for leads
+export const leadTasks = pgTable("lead_tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => leads.id).notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  dueDate: timestamp("due_date"),
+  priority: leadTaskPriorityEnum("priority").notNull().default("medium"),
+  status: leadTaskStatusEnum("status").notNull().default("pending"),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  completedAt: timestamp("completed_at"),
+  completedBy: varchar("completed_by").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -1007,6 +1076,17 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
   updatedAt: true,
 });
 
+export const insertLeadActivitySchema = createInsertSchema(leadActivities).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertLeadTaskSchema = createInsertSchema(leadTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertFenceStyleSchema = createInsertSchema(fenceStyles).omit({
   id: true,
 });
@@ -1149,6 +1229,12 @@ export type Client = typeof clients.$inferSelect;
 
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type Lead = typeof leads.$inferSelect;
+
+export type InsertLeadActivity = z.infer<typeof insertLeadActivitySchema>;
+export type LeadActivity = typeof leadActivities.$inferSelect;
+
+export type InsertLeadTask = z.infer<typeof insertLeadTaskSchema>;
+export type LeadTask = typeof leadTasks.$inferSelect;
 
 export type InsertFenceStyle = z.infer<typeof insertFenceStyleSchema>;
 export type FenceStyle = typeof fenceStyles.$inferSelect;

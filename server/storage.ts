@@ -10,6 +10,7 @@ import {
   departments, workflows, workflowVersions, policies, policyVersions,
   policyAcknowledgements, resources, knowledgeArticles,
   jobSetupDocuments, jobSetupProducts, liveDocumentTemplates,
+  leadActivities, leadTasks,
   type User, type InsertUser,
   type Client, type InsertClient,
   type Lead, type InsertLead,
@@ -54,6 +55,8 @@ import {
   type JobSetupSection4Schedule,
   type JobSetupSection5Install,
   type LiveDocumentTemplate, type InsertLiveDocumentTemplate,
+  type LeadActivity, type InsertLeadActivity,
+  type LeadTask, type InsertLeadTask,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -84,6 +87,16 @@ export interface IStorage {
   updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead | undefined>;
   deleteLead(id: string): Promise<boolean>;
   searchLeads(query: string): Promise<Lead[]>;
+
+  // Lead Activities
+  getLeadActivities(leadId: string): Promise<LeadActivity[]>;
+  createLeadActivity(activity: InsertLeadActivity): Promise<LeadActivity>;
+
+  // Lead Tasks
+  getLeadTasks(leadId: string): Promise<LeadTask[]>;
+  createLeadTask(task: InsertLeadTask): Promise<LeadTask>;
+  updateLeadTask(id: string, task: Partial<InsertLeadTask>): Promise<LeadTask | undefined>;
+  deleteLeadTask(id: string): Promise<boolean>;
 
   // Fence Styles
   getFenceStyle(id: string): Promise<FenceStyle | undefined>;
@@ -587,6 +600,43 @@ export class DatabaseStorage implements IStorage {
         like(leads.fenceStyle, `%${query}%`)
       )
     );
+  }
+
+  // Lead Activities
+  async getLeadActivities(leadId: string): Promise<LeadActivity[]> {
+    return db.select().from(leadActivities)
+      .where(eq(leadActivities.leadId, leadId))
+      .orderBy(desc(leadActivities.createdAt));
+  }
+
+  async createLeadActivity(activity: InsertLeadActivity): Promise<LeadActivity> {
+    const [newActivity] = await db.insert(leadActivities).values(activity).returning();
+    return newActivity;
+  }
+
+  // Lead Tasks
+  async getLeadTasks(leadId: string): Promise<LeadTask[]> {
+    return db.select().from(leadTasks)
+      .where(eq(leadTasks.leadId, leadId))
+      .orderBy(desc(leadTasks.createdAt));
+  }
+
+  async createLeadTask(task: InsertLeadTask): Promise<LeadTask> {
+    const [newTask] = await db.insert(leadTasks).values(task).returning();
+    return newTask;
+  }
+
+  async updateLeadTask(id: string, task: Partial<InsertLeadTask>): Promise<LeadTask | undefined> {
+    const [updatedTask] = await db.update(leadTasks)
+      .set({ ...task, updatedAt: new Date() })
+      .where(eq(leadTasks.id, id))
+      .returning();
+    return updatedTask;
+  }
+
+  async deleteLeadTask(id: string): Promise<boolean> {
+    const result = await db.delete(leadTasks).where(eq(leadTasks.id, id));
+    return true;
   }
 
   // Fence Styles

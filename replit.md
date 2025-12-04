@@ -22,6 +22,7 @@ The system employs a modern web architecture with a clear separation of concerns
 
 **Feature Specifications:**
 -   **Core Modules:** Includes modules for Lead Management, Quote Builder, Job Workflow, Production Queue, Scheduling, Inventory, Payments, and CRM Messaging (SMS).
+-   **Lead Card Detail Dialog:** Tabbed interface showing Details, Quotes, Activity (notes, tasks, activity log), and Live Document tabs. Supports adding notes, creating tasks, logging calls, and viewing/creating live documents for supply_install leads.
 -   **Specialized Applications:** Features a dedicated Installer Mobile App and a Trade Client Portal for self-service.
 -   **Hierarchical Numbering:** Implements a strict hierarchical numbering system for Leads (`PVC-XXX`), Quotes (`PVC-XXX-Q#`), Jobs (`PVC-XXX-JOB`), and Invoices (`PVC-XXX-INV`) to ensure consistent tracking and data linkage.
 -   **Role-Based Access Control:** Supports 7 distinct user roles (admin, sales, scheduler, production_manager, warehouse, installer, trade_client) with granular permissions.

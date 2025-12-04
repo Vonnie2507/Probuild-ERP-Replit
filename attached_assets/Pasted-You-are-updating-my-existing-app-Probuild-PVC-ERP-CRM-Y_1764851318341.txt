@@ -1,0 +1,274 @@
+You are updating my existing app “Probuild PVC ERP & CRM.”
+
+Your task is to implement a clean, controlled workflow from:
+
+Lead Created → Quotes Created & Sent → Quote Approved → Lead Becomes Job → Winning Quote Becomes Invoice → Scheduler & Production receive complete info via Job Setup Live Document.
+
+We do NOT use Estimates or Opportunities.
+All workflow begins with a Lead Card (a Lead record), which eventually becomes a Job Card (a Job record).
+
+We already have a separate specification for the JobSetupDocument (live document).
+This prompt ensures everything BEFORE that stage works perfectly.
+
+⸻
+
+1. LEAD CARDS — STRUCTURE & RELATIONSHIP
+
+A Lead Card is a single Lead displayed on the Leads page.
+
+When a user clicks a Lead Card, it opens a detailed view showing:
+	•	Lead details
+	•	How many Quotes exist for that Lead
+	•	Activity & Tasks
+	•	The Job Setup Live Document (single per Lead)
+	•	Buttons for sending info, logging calls, creating new quotes, etc.
+
+Client Relationship
+	•	Every Lead Card must be linked to one Client.
+	•	A Client can have many Lead Cards, but:
+	•	Each Lead Card must represent a different job.
+	•	You must NEVER create multiple Lead Cards for the same physical job or site.
+
+Examples:
+	•	Client hires us for a front fence → Lead: PVC-001
+	•	One year later, same client hires us for pool fencing → New Lead: PVC-015
+
+Each Lead has its own Quotes, Job Setup Document, Job, and Invoice.
+
+⸻
+
+2. NUMBERING SYSTEM
+
+Every Lead/Job has a base code:
+	•	Lead/Job Root Code: PVC-001, PVC-002, PVC-003…
+
+Based on this:
+	•	Quotes:
+	•	PVC-001-Q1, PVC-001-Q2, etc.
+	•	Invoice:
+	•	PVC-001-INV
+	•	Job:
+	•	PVC-001 (uses the same root code as the Lead)
+
+There is only ONE root code per job, and all job assets share it.
+
+⸻
+
+3. LEAD CREATION
+
+When a new Lead is added on the Leads page:
+	1.	System assigns the next available root code: PVC-xxx
+	2.	Required fields:
+	•	Client
+	•	Contact details
+	•	Site address
+	•	Lead type (Public / Trade)
+	•	Job type (Supply Only / Supply + Install)
+	•	Fence style (if known)
+	•	Approx metres (if known)
+	•	Priority & source
+	3.	ONE Job Setup Live Document must be created:
+	•	Automatically OR via a button (“Start Job Setup Live Document”)
+	•	Lead MUST NOT have more than one live document.
+	•	This document stays with the Lead and later attaches to the Job.
+	4.	Lead status should flow through a Kanban board:
+	•	New
+	•	Contacted
+	•	Needs Quote
+	•	Awaiting Response
+	•	Won (after quote approval)
+	•	Lost
+
+⸻
+
+4. QUOTES — MULTIPLE QUOTES PER LEAD, WITH VERSIONING
+
+Each Lead may have any number of Quotes:
+	•	PVC-001-Q1
+	•	PVC-001-Q2
+	•	etc.
+
+Quote fields
+	•	Quote code
+	•	Status: Draft / Sent / Approved / Rejected
+	•	Valid-until date
+	•	Total value
+	•	Line items
+	•	Link to create Invoice & Job after approval
+
+Versioning Logic
+
+Each Quote has internal versions:
+	•	v1, v2, v3…
+
+Fields in QuoteVersion:
+	•	version_number
+	•	status (AutoDraft / Draft / Published)
+	•	pricing + notes
+	•	created_by, created_at
+
+Behaviour:
+	•	Editing a quote creates/uses an AutoDraft version.
+	•	Autosave stores work safely.
+	•	A button “Apply this version to [quote_code]” publishes the version.
+	•	Published version becomes the active version the client sees.
+	•	Staff see a Version History panel listing v1, v2, v3.
+
+Approving a Quote
+	•	Only ONE quote per Lead may be marked Approved.
+	•	Approval automatically disallows any other Quote from being Approved.
+
+⸻
+
+5. JOB SETUP LIVE DOCUMENT (EARLY STAGE)
+
+The JobSetupDocument:
+	•	Is created at Lead stage
+	•	Is filled out during early calls
+	•	Contains:
+	•	Site access questions
+	•	Footings, retic, underground services
+	•	Pool / dog / gate details
+	•	Driveway access
+	•	Hazards
+	•	Equipment required (core drill, chainsaw, skip bin etc.)
+	•	Photos and site layout
+	•	There must only ever be one JobSetupDocument per Lead.
+
+When the Lead becomes a Job:
+	•	The same JobSetupDocument is attached to the new Job
+	•	It continues through Production + Scheduling + Install phases
+
+This prevents missing details and handover problems.
+
+⸻
+
+6. CONVERSION: APPROVED QUOTE → JOB + INVOICE
+
+When a user clicks “Convert Approved Quote to Job & Invoice”, the system must:
+
+6.1 Validate before conversion
+
+Lead must have:
+	•	Full client and site details
+	•	Job type selected
+	•	JobSetupDocument created
+	•	For Supply + Install jobs:
+	•	JobSetupDocument’s sales/setup section must have required fields completed
+
+If not, show error:
+
+“Job cannot be created until required Lead details and Job Setup information are complete.”
+
+6.2 Create Job
+	•	Job code = Lead code (PVC-001)
+	•	Status: “New Job – Setup In Progress”
+	•	Link Job to:
+	•	The Lead
+	•	The Approved Quote
+	•	The JobSetupDocument
+(the document should now also store job_id)
+
+6.3 Convert Quote to Invoice
+
+Create an Invoice:
+	•	invoice_code = [root]-INV (e.g. PVC-001-INV)
+	•	job_id = job record
+	•	quote_id = approved quote
+	•	Use the active quote version as the invoice values
+
+Support future use:
+	•	Payment tracking
+	•	Deposit logic
+
+6.4 Update Lead
+	•	Lead status becomes: Won or Converted to Job
+	•	Store winning_quote_id
+
+⸻
+
+7. ACTIVITY & TASK SYSTEM
+
+Each Lead has:
+
+Activity Log
+	•	Logs calls
+	•	Logs emails/SMS/templates
+	•	Logs notes
+	•	Logs when quotes are created, sent, approved
+
+Task System
+	•	Reminders for follow-ups
+	•	Due dates
+	•	Assigned to a team member
+	•	Visible in the Lead card view
+
+Quick Actions on Lead Card
+
+(These create Activities and optionally Tasks)
+	•	Send catalogue
+	•	Send site details form
+	•	Send onsite quote booking link
+	•	Send “when do you need the job done?” form
+	•	Log call
+	•	Add note
+	•	Create quote
+
+⸻
+
+8. ROLE PERMISSIONS
+	•	Sales team:
+	•	Create/edit Leads
+	•	Create/edit Quotes
+	•	Fill in sales portion of JobSetupDocument
+	•	Approve Quotes (with validation)
+	•	Cannot bypass conversion requirements
+	•	Scheduler (Craig):
+	•	Cannot edit Leads or pricing
+	•	Can only edit Scheduling section of JobSetupDocument
+	•	Needs full visibility of completed Lead → Job handover
+	•	Production team:
+	•	Cannot edit Lead or Quotes
+	•	Edits Production section of JobSetupDocument
+	•	Installers:
+	•	Only work in installer checklist section of JobSetupDocument
+	•	Admin/Owners:
+	•	Full system access
+
+⸻
+
+9. UX REQUIREMENTS
+
+Leads Page (Kanban)
+	•	New → Contacted → Needs Quote → Awaiting Response → Won → Lost
+
+Inside Lead Card
+
+Tabs:
+	•	Lead Details
+	•	Quotes
+	•	Activity/Tasks
+	•	Job Setup Live Document (one document per Lead)
+
+Quotes Tab
+	•	List of all quotes
+	•	Status displayed
+	•	Click to open quote + versioning
+	•	Button to Approve
+	•	Button to Convert to Job & Invoice (only available when approved)
+
+After Conversion
+	•	Lead screen clearly shows that it is now a Job
+	•	Direct link to Job page
+	•	Existing JobSetupDocument becomes the Job’s handover document
+
+⸻
+
+10. IMPLEMENTATION NOTES
+	•	Follow existing architecture (ORM, API, UI components)
+	•	Do NOT create an Estimate or Opportunity entity
+	•	Enforce:
+	•	Single Live Document per Lead
+	•	Only 1 Approved Quote per Lead
+	•	Strong validation before job creation
+	•	Ensure the scheduler and production teams receive complete, accurate information through the JobSetupDocument before any job progresses

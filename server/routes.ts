@@ -14,7 +14,8 @@ import {
   insertJobSetupDocumentSchema, insertJobSetupProductSchema,
   section1SalesSchema, section2ProductsMetaSchema, section3ProductionSchema,
   section4ScheduleSchema, section5InstallSchema,
-  insertLiveDocumentTemplateSchema
+  insertLiveDocumentTemplateSchema,
+  insertLeadActivitySchema, insertLeadTaskSchema
 } from "@shared/schema";
 import { z } from "zod";
 import Stripe from "stripe";
@@ -450,6 +451,134 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting lead:", error);
       res.status(500).json({ error: "Failed to delete lead" });
+    }
+  });
+
+  // Lead Activities
+  app.get("/api/leads/:leadId/activities", async (req, res) => {
+    try {
+      const activities = await storage.getLeadActivities(req.params.leadId);
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching lead activities:", error);
+      res.status(500).json({ error: "Failed to fetch lead activities" });
+    }
+  });
+
+  app.post("/api/leads/:leadId/activities", async (req, res) => {
+    try {
+      const { activityType, title, description, metadata } = req.body;
+      
+      if (!activityType || !title) {
+        return res.status(400).json({ error: "Activity type and title are required" });
+      }
+      
+      const activityData: Record<string, unknown> = {
+        leadId: req.params.leadId,
+        activityType,
+        title,
+      };
+      
+      if (description) activityData.description = description;
+      if (metadata) activityData.metadata = metadata;
+      
+      const validatedData = insertLeadActivitySchema.parse(activityData);
+      
+      const activity = await storage.createLeadActivity(validatedData);
+      res.status(201).json(activity);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating lead activity:", error);
+      res.status(500).json({ error: "Failed to create lead activity" });
+    }
+  });
+
+  // Lead Tasks
+  app.get("/api/leads/:leadId/tasks", async (req, res) => {
+    try {
+      const tasks = await storage.getLeadTasks(req.params.leadId);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching lead tasks:", error);
+      res.status(500).json({ error: "Failed to fetch lead tasks" });
+    }
+  });
+
+  app.post("/api/leads/:leadId/tasks", async (req, res) => {
+    try {
+      const { title, description, dueDate, priority, assignedTo } = req.body;
+      
+      if (!title) {
+        return res.status(400).json({ error: "Task title is required" });
+      }
+      
+      const taskData: Record<string, unknown> = {
+        leadId: req.params.leadId,
+        title,
+        status: "pending",
+      };
+      
+      if (description) taskData.description = description;
+      if (dueDate) taskData.dueDate = new Date(dueDate);
+      if (priority) taskData.priority = priority;
+      if (assignedTo) taskData.assignedTo = assignedTo;
+      
+      const validatedData = insertLeadTaskSchema.parse(taskData);
+      
+      const task = await storage.createLeadTask(validatedData);
+      res.status(201).json(task);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating lead task:", error);
+      res.status(500).json({ error: "Failed to create lead task" });
+    }
+  });
+
+  app.patch("/api/lead-tasks/:id", async (req, res) => {
+    try {
+      const { status, title, description, priority, dueDate, assignedTo } = req.body;
+      
+      const updateData: Record<string, unknown> = {};
+      
+      const validStatuses = ["pending", "in_progress", "completed"];
+      if (status) {
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ error: "Invalid status value" });
+        }
+        updateData.status = status;
+        if (status === "completed") {
+          updateData.completedAt = new Date();
+        }
+      }
+      
+      if (title !== undefined) updateData.title = title;
+      if (description !== undefined) updateData.description = description;
+      if (priority !== undefined) updateData.priority = priority;
+      if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+      if (assignedTo !== undefined) updateData.assignedTo = assignedTo;
+      
+      const task = await storage.updateLeadTask(req.params.id, updateData);
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      res.json(task);
+    } catch (error) {
+      console.error("Error updating lead task:", error);
+      res.status(500).json({ error: "Failed to update lead task" });
+    }
+  });
+
+  app.delete("/api/lead-tasks/:id", async (req, res) => {
+    try {
+      await storage.deleteLeadTask(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting lead task:", error);
+      res.status(500).json({ error: "Failed to delete lead task" });
     }
   });
 
