@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
@@ -44,6 +44,8 @@ interface LeadDetailDialogProps {
   onEditLead: () => void;
   onCreateQuote: () => void;
   onViewQuote: (quote: Quote) => void;
+  initialTab?: string;
+  highlightedTaskId?: string;
 }
 
 const activityTypeLabels: Record<string, { label: string; icon: typeof MessageSquare }> = {
@@ -85,9 +87,37 @@ export function LeadDetailDialog({
   onEditLead,
   onCreateQuote,
   onViewQuote,
+  initialTab,
+  highlightedTaskId,
 }: LeadDetailDialogProps) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("details");
+  const [activeTab, setActiveTab] = useState(initialTab || "details");
+  const [focusedTaskId, setFocusedTaskId] = useState<string | undefined>(highlightedTaskId);
+  
+  // Reset to initialTab when dialog opens with a specific tab
+  useEffect(() => {
+    if (open && initialTab) {
+      setActiveTab(initialTab);
+    }
+    if (open && highlightedTaskId) {
+      setFocusedTaskId(highlightedTaskId);
+      // Scroll to the task after a short delay to allow rendering
+      setTimeout(() => {
+        const taskElement = document.querySelector(`[data-task-id="${highlightedTaskId}"]`);
+        if (taskElement) {
+          taskElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 100);
+    }
+  }, [open, initialTab, highlightedTaskId]);
+  
+  // Clear the focused task after a few seconds
+  useEffect(() => {
+    if (focusedTaskId) {
+      const timer = setTimeout(() => setFocusedTaskId(undefined), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [focusedTaskId]);
   const [newNote, setNewNote] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<string>("medium");
@@ -707,8 +737,9 @@ export function LeadDetailDialog({
                         return (
                           <div
                             key={task.id}
-                            className="flex items-center justify-between p-2 border rounded-lg"
+                            className={`flex items-center justify-between p-2 border rounded-lg transition-all duration-300 ${focusedTaskId === task.id ? "ring-2 ring-primary bg-primary/5" : ""}`}
                             data-testid={`task-item-${task.id}`}
+                            data-task-id={task.id}
                           >
                             <div className="flex items-center gap-2">
                               <Button

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -11,7 +12,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   CheckCircle2, Clock, AlertCircle, Bell, Calendar, Cloud, Sun, CloudRain,
   Thermometer, Umbrella, FileText, Phone, Briefcase, Users, TrendingUp,
-  CalendarCheck, Target, ExternalLink
+  CalendarCheck, Target, ExternalLink, Plus, Package, Truck, ClipboardList,
+  Hammer, Settings, BarChart3, UserPlus, Boxes, Wrench
 } from "lucide-react";
 import type { LeadTask, Notification, StaffLeaveBalance } from "@shared/schema";
 import { formatDistanceToNow, isToday, isBefore, addDays, format } from "date-fns";
@@ -194,6 +196,7 @@ function LeaveBalanceWidget({ leaveBalance }: { leaveBalance: DashboardData["lea
 
 function TasksWidget({ tasks }: { tasks: LeadTask[] }) {
   const [, setLocation] = useLocation();
+  const [showCompleted, setShowCompleted] = useState(false);
   
   const updateTaskMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
@@ -210,6 +213,7 @@ function TasksWidget({ tasks }: { tasks: LeadTask[] }) {
 
   const now = new Date();
   const activeTasks = tasks.filter(t => t.status !== "completed");
+  const completedTasks = tasks.filter(t => t.status === "completed");
   const overdueTasks = activeTasks.filter(t => 
     t.dueDate && isBefore(new Date(t.dueDate), now)
   );
@@ -264,7 +268,7 @@ function TasksWidget({ tasks }: { tasks: LeadTask[] }) {
         size="icon"
         onClick={(e) => {
           e.stopPropagation();
-          setLocation(`/leads?taskId=${task.id}`);
+          setLocation(`/leads?leadId=${task.leadId}&taskId=${task.id}&tab=activity`);
         }}
         data-testid={`button-open-task-${task.id}`}
       >
@@ -281,11 +285,23 @@ function TasksWidget({ tasks }: { tasks: LeadTask[] }) {
             <CheckCircle2 className="h-4 w-4" />
             My To-Do List
           </CardTitle>
-          <CardDescription>{tasks.filter(t => t.status !== "completed").length} active tasks</CardDescription>
+          <CardDescription>{activeTasks.length} active tasks{completedTasks.length > 0 && ` • ${completedTasks.length} completed`}</CardDescription>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setLocation("/leads")} data-testid="button-view-all-tasks">
-          View All
-        </Button>
+        <div className="flex items-center gap-2">
+          {completedTasks.length > 0 && (
+            <Button 
+              variant={showCompleted ? "secondary" : "ghost"} 
+              size="sm" 
+              onClick={() => setShowCompleted(!showCompleted)}
+              data-testid="button-toggle-completed"
+            >
+              {showCompleted ? "Hide Completed" : "Show Completed"}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => setLocation("/leads")} data-testid="button-view-all-tasks">
+            View All
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[400px]">
@@ -338,10 +354,22 @@ function TasksWidget({ tasks }: { tasks: LeadTask[] }) {
               </div>
             )}
             
-            {activeTasks.length === 0 && (
+            {activeTasks.length === 0 && !showCompleted && (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No active tasks. Great job!
               </p>
+            )}
+
+            {showCompleted && completedTasks.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-green-600 mb-2 flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Completed ({completedTasks.length})
+                </h4>
+                <div className="space-y-2">
+                  {completedTasks.slice(0, 10).map(renderTask)}
+                </div>
+              </div>
             )}
           </div>
         </ScrollArea>
@@ -447,6 +475,89 @@ function NotificationsWidget({ notifications }: { notifications: Notification[] 
   );
 }
 
+interface QuickAction {
+  label: string;
+  icon: typeof Plus;
+  path: string;
+  variant?: "default" | "outline" | "ghost";
+}
+
+function getRoleQuickActions(role: string): QuickAction[] {
+  const commonActions: QuickAction[] = [];
+  
+  switch (role) {
+    case 'admin':
+      return [
+        { label: "New Lead", icon: UserPlus, path: "/leads", variant: "default" },
+        { label: "Schedule", icon: CalendarCheck, path: "/schedule", variant: "outline" },
+        { label: "Business Dashboard", icon: BarChart3, path: "/business-dashboard", variant: "outline" },
+        { label: "Settings", icon: Settings, path: "/organisation", variant: "ghost" },
+      ];
+    case 'sales':
+      return [
+        { label: "New Lead", icon: UserPlus, path: "/leads", variant: "default" },
+        { label: "Quotes", icon: FileText, path: "/quotes", variant: "outline" },
+        { label: "My Clients", icon: Users, path: "/clients", variant: "outline" },
+      ];
+    case 'scheduler':
+      return [
+        { label: "Schedule", icon: CalendarCheck, path: "/schedule", variant: "default" },
+        { label: "Jobs", icon: Briefcase, path: "/jobs", variant: "outline" },
+        { label: "Installers", icon: Users, path: "/organisation", variant: "ghost" },
+      ];
+    case 'production_manager':
+      return [
+        { label: "Production Queue", icon: ClipboardList, path: "/production", variant: "default" },
+        { label: "Jobs", icon: Briefcase, path: "/jobs", variant: "outline" },
+        { label: "Inventory", icon: Package, path: "/inventory", variant: "outline" },
+      ];
+    case 'warehouse':
+      return [
+        { label: "Inventory", icon: Boxes, path: "/inventory", variant: "default" },
+        { label: "Low Stock", icon: AlertCircle, path: "/inventory?filter=low-stock", variant: "outline" },
+        { label: "Deliveries", icon: Truck, path: "/schedule", variant: "outline" },
+      ];
+    case 'installer':
+      return [
+        { label: "My Jobs", icon: Hammer, path: "/jobs?filter=mine", variant: "default" },
+        { label: "Schedule", icon: CalendarCheck, path: "/schedule", variant: "outline" },
+        { label: "Job Docs", icon: FileText, path: "/jobs", variant: "ghost" },
+      ];
+    case 'trade_client':
+      return [
+        { label: "My Orders", icon: Package, path: "/jobs", variant: "default" },
+        { label: "New Quote", icon: FileText, path: "/quotes", variant: "outline" },
+        { label: "Contact Us", icon: Phone, path: "/contact", variant: "ghost" },
+      ];
+    default:
+      return [
+        { label: "Dashboard", icon: BarChart3, path: "/", variant: "default" },
+      ];
+  }
+}
+
+function RoleQuickActions({ role }: { role: string }) {
+  const [, setLocation] = useLocation();
+  const actions = getRoleQuickActions(role);
+  
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {actions.map((action, index) => (
+        <Button 
+          key={index}
+          variant={action.variant || "outline"} 
+          size="sm" 
+          onClick={() => setLocation(action.path)}
+          data-testid={`button-quick-${action.label.toLowerCase().replace(/\s+/g, '-')}`}
+        >
+          <action.icon className="h-4 w-4 mr-2" />
+          {action.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 function KPIsWidget({ kpis }: { kpis: KpiItem[] }) {
   return (
     <Card data-testid="widget-kpis">
@@ -532,15 +643,7 @@ export default function MyDashboard() {
             {displayUser?.positionTitle || formatRoleDisplay(displayUser?.role || "staff")} • {todayFormatted}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setLocation("/leads")} data-testid="button-quick-new-lead">
-            New Lead
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setLocation("/schedule")} data-testid="button-quick-schedule">
-            <CalendarCheck className="h-4 w-4 mr-2" />
-            Schedule
-          </Button>
-        </div>
+        <RoleQuickActions role={displayUser?.role || "staff"} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

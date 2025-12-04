@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { KanbanBoard } from "@/components/leads/KanbanBoard";
@@ -67,6 +68,8 @@ interface KanbanLead {
 
 export default function Leads() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const searchString = useSearch();
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -83,6 +86,8 @@ export default function Leads() {
   const [isEditingQuote, setIsEditingQuote] = useState(false);
   const [isSetupTemplateOpen, setIsSetupTemplateOpen] = useState(false);
   const [selectedLeadForTemplate, setSelectedLeadForTemplate] = useState<Lead | null>(null);
+  const [initialTab, setInitialTab] = useState<string | undefined>(undefined);
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | undefined>(undefined);
   const [formData, setFormData] = useState({
     clientName: "",
     phone: "",
@@ -112,6 +117,28 @@ export default function Leads() {
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
+
+  // Handle URL parameters for deep linking to specific lead/task
+  useEffect(() => {
+    if (leads.length > 0 && searchString) {
+      const params = new URLSearchParams(searchString);
+      const leadId = params.get("leadId");
+      const taskId = params.get("taskId");
+      const tab = params.get("tab");
+      
+      if (leadId) {
+        const lead = leads.find(l => l.id === leadId);
+        if (lead) {
+          setSelectedLead(lead);
+          setInitialTab(tab || undefined);
+          setHighlightedTaskId(taskId || undefined);
+          setIsDetailDialogOpen(true);
+          // Clear the URL params after opening
+          setLocation("/leads", { replace: true });
+        }
+      }
+    }
+  }, [leads, searchString, setLocation]);
 
   const createLeadMutation = useMutation({
     mutationFn: async (data: InsertLead) => {
@@ -889,19 +916,31 @@ export default function Leads() {
 
       <LeadDetailDialog
         open={isDetailDialogOpen}
-        onOpenChange={setIsDetailDialogOpen}
+        onOpenChange={(open) => {
+          setIsDetailDialogOpen(open);
+          if (!open) {
+            setInitialTab(undefined);
+            setHighlightedTaskId(undefined);
+          }
+        }}
         lead={selectedLead}
         client={selectedLead?.clientId ? clients.find(c => c.id === selectedLead.clientId) || null : null}
         quotes={selectedLead ? getLeadQuotes(selectedLead.id) : []}
         users={users}
+        initialTab={initialTab}
+        highlightedTaskId={highlightedTaskId}
         onEditLead={() => {
           setIsDetailDialogOpen(false);
+          setInitialTab(undefined);
+          setHighlightedTaskId(undefined);
           const kanbanLead = kanbanLeads.find(l => l.id === selectedLead?.id);
           if (kanbanLead) handleEditLead(kanbanLead);
         }}
         onCreateQuote={() => {
           setSelectedLeadForQuote(selectedLead);
           setIsDetailDialogOpen(false);
+          setInitialTab(undefined);
+          setHighlightedTaskId(undefined);
           setIsQuoteBuilderOpen(true);
         }}
         onViewQuote={(quote) => {
