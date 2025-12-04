@@ -299,7 +299,7 @@ export async function registerRoutes(
 
   app.patch("/api/leads/:id", async (req, res) => {
     try {
-      const { clientName, clientPhone, clientEmail, ...rawLeadData } = req.body;
+      const { clientName, clientPhone, clientEmail, clientId: passedClientId, ...rawLeadData } = req.body;
       
       // Get existing lead to find clientId
       const existingLead = await storage.getLead(req.params.id);
@@ -312,8 +312,83 @@ export async function registerRoutes(
       const trimmedPhone = (clientPhone || "").trim();
       const trimmedEmail = (clientEmail || "").trim();
       
-      // Update client info if provided and there's an existing client
-      if (existingLead.clientId && (trimmedName || trimmedPhone || trimmedEmail)) {
+      let newClientId: string | null = null;
+      
+      // If a specific client ID is passed, use that (user selected existing client)
+      if (passedClientId && !existingLead.clientId) {
+        newClientId = passedClientId;
+        // Update the existing client's info if provided
+        if (trimmedName || trimmedPhone || trimmedEmail) {
+          const existingClient = await storage.getClient(passedClientId);
+          if (existingClient) {
+            const updates: Record<string, string> = {};
+            if (trimmedName && trimmedName !== existingClient.name) updates.name = trimmedName;
+            if (trimmedPhone && trimmedPhone !== (existingClient.phone || "")) updates.phone = trimmedPhone;
+            if (trimmedEmail && trimmedEmail !== (existingClient.email || "")) updates.email = trimmedEmail;
+            if (Object.keys(updates).length > 0) {
+              await storage.updateClient(passedClientId, updates);
+            }
+          }
+        }
+      }
+      // If lead has no client and client info is provided, create or find client
+      else if (!existingLead.clientId && trimmedName) {
+        // Try to find existing client by phone or email first
+        const allClients = await storage.getClients();
+        let matchingClient = null;
+        
+        if (trimmedPhone) {
+          matchingClient = allClients.find(c => c.phone === trimmedPhone);
+        }
+        if (!matchingClient && trimmedEmail) {
+          matchingClient = allClients.find(c => c.email === trimmedEmail);
+        }
+        
+        if (matchingClient) {
+          newClientId = matchingClient.id;
+          // Update client info if different
+          const needsUpdate = matchingClient.name !== trimmedName || 
+              matchingClient.phone !== trimmedPhone || 
+              matchingClient.email !== trimmedEmail;
+          if (needsUpdate) {
+            await storage.updateClient(matchingClient.id, {
+              name: trimmedName,
+              phone: trimmedPhone || matchingClient.phone || "",
+              email: trimmedEmail || matchingClient.email || "",
+              address: rawLeadData.siteAddress || matchingClient.address || "",
+            });
+          }
+        } else {
+          // Create new client
+          const newClient = await storage.createClient({
+            name: trimmedName,
+            phone: trimmedPhone,
+            email: trimmedEmail,
+            address: rawLeadData.siteAddress || existingLead.siteAddress || "",
+            clientType: existingLead.leadType === "trade" ? "trade" : "public",
+          });
+          newClientId = newClient.id;
+        }
+      }
+      // If passed a different client ID than existing, switch to that client
+      else if (passedClientId && existingLead.clientId && passedClientId !== existingLead.clientId) {
+        newClientId = passedClientId;
+        // Optionally update the new client's info
+        if (trimmedName || trimmedPhone || trimmedEmail) {
+          const existingClient = await storage.getClient(passedClientId);
+          if (existingClient) {
+            const updates: Record<string, string> = {};
+            if (trimmedName && trimmedName !== existingClient.name) updates.name = trimmedName;
+            if (trimmedPhone && trimmedPhone !== (existingClient.phone || "")) updates.phone = trimmedPhone;
+            if (trimmedEmail && trimmedEmail !== (existingClient.email || "")) updates.email = trimmedEmail;
+            if (Object.keys(updates).length > 0) {
+              await storage.updateClient(passedClientId, updates);
+            }
+          }
+        }
+      }
+      // Update client info if lead already has a client and no new clientId passed
+      else if (existingLead.clientId && (trimmedName || trimmedPhone || trimmedEmail)) {
         // Fetch existing client to compare values
         const existingClient = await storage.getClient(existingLead.clientId);
         if (existingClient) {
@@ -350,6 +425,11 @@ export async function registerRoutes(
       if (rawLeadData.assignedTo !== undefined) cleanLeadPayload.assignedTo = rawLeadData.assignedTo;
       if (rawLeadData.followUpDate !== undefined) cleanLeadPayload.followUpDate = rawLeadData.followUpDate;
       if (rawLeadData.notes !== undefined) cleanLeadPayload.notes = rawLeadData.notes;
+      
+      // Link new client if one was created
+      if (newClientId) {
+        cleanLeadPayload.clientId = newClientId;
+      }
       
       const lead = await storage.updateLead(req.params.id, cleanLeadPayload);
       if (!lead) {

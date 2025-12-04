@@ -119,6 +119,14 @@ The numbering logic uses integer-based MAX calculations instead of lexicographic
   - Delete confirmation dialogs with warnings
   - Inline icon buttons on detail views
   - Context menu actions on LeadCard component
+- **Client Autocomplete** (NEW): Smart client search when creating/editing leads
+  - Debounced search (300ms) on name, phone, email, and address fields
+  - Suggestions dropdown shows matching clients with phone/address details
+  - Click to select auto-fills all client fields (name, phone, email, address)
+  - Green indicator when existing client is selected
+  - Clear button to start fresh and enter new client info
+  - Automatic client creation when editing leads without existing clients
+  - Backend creates new client or links existing based on phone/email match
 - **Quote Builder**: Comprehensive quote creation system accessible from Leads page:
   - Line items with product selection from inventory
   - Quick add buttons for posts, rails, pickets

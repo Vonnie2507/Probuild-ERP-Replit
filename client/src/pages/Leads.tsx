@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,6 +91,9 @@ export default function Leads() {
     description: "",
     jobFulfillmentType: "supply_install" as "supply_only" | "supply_install",
   });
+  const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
@@ -155,6 +158,55 @@ export default function Leads() {
     },
   });
 
+  // Debounced client search effect
+  useEffect(() => {
+    const searchTerm = formData.clientName || formData.phone || formData.address;
+    if (searchTerm && searchTerm.length >= 2 && !selectedClientId) {
+      const timer = setTimeout(async () => {
+        try {
+          const response = await fetch(`/api/clients?search=${encodeURIComponent(searchTerm)}`);
+          if (response.ok) {
+            const matchingClients = await response.json();
+            setClientSuggestions(matchingClients);
+            setShowSuggestions(matchingClients.length > 0);
+          }
+        } catch (error) {
+          console.error("Error searching clients:", error);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setClientSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [formData.clientName, formData.phone, formData.address, selectedClientId]);
+
+  const handleSelectClient = (client: Client) => {
+    setFormData({
+      ...formData,
+      clientName: client.name,
+      phone: client.phone || "",
+      email: client.email || "",
+      address: client.address || formData.address,
+    });
+    setSelectedClientId(client.id);
+    setShowSuggestions(false);
+    toast({
+      title: "Existing Client Selected",
+      description: `${client.name} found in your client database`,
+    });
+  };
+
+  const handleClearClientSelection = () => {
+    setSelectedClientId(null);
+    setFormData({
+      ...formData,
+      clientName: "",
+      phone: "",
+      email: "",
+    });
+  };
+
   const deleteLeadMutation = useMutation({
     mutationFn: async (id: string) => {
       return apiRequest("DELETE", `/api/leads/${id}`);
@@ -216,6 +268,10 @@ export default function Leads() {
         description: originalLead.description || "",
         jobFulfillmentType: (originalLead.jobFulfillmentType as "supply_only" | "supply_install") || "supply_install",
       });
+      // Set selected client ID if lead already has a linked client
+      setSelectedClientId(originalLead.clientId || null);
+      setClientSuggestions([]);
+      setShowSuggestions(false);
       setIsEditDialogOpen(true);
     }
   };
@@ -246,6 +302,7 @@ export default function Leads() {
         description: formData.description,
         siteAddress: formData.address,
         jobFulfillmentType: formData.jobFulfillmentType,
+        clientId: selectedClientId,
         clientName: formData.clientName.trim(),
         clientPhone: formData.phone.trim(),
         clientEmail: formData.email.trim(),
@@ -264,6 +321,9 @@ export default function Leads() {
       description: "",
       jobFulfillmentType: "supply_install",
     });
+    setSelectedClientId(null);
+    setClientSuggestions([]);
+    setShowSuggestions(false);
   };
 
   const getClientName = (clientId: string | null): string => {
@@ -382,6 +442,7 @@ export default function Leads() {
       siteAddress: formData.address,
       stage: "new",
       jobFulfillmentType: formData.jobFulfillmentType,
+      clientId: selectedClientId,
       clientName: formData.clientName.trim(),
       clientPhone: formData.phone.trim(),
       clientEmail: formData.email.trim(),
@@ -426,13 +487,61 @@ export default function Leads() {
             <form onSubmit={handleSubmitLead} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="clientName">Client Name</Label>
-                <Input 
-                  id="clientName" 
-                  placeholder="Enter client name" 
-                  value={formData.clientName}
-                  onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                  data-testid="input-client-name" 
-                />
+                <div className="relative">
+                  <div className="flex gap-2">
+                    <Input 
+                      id="clientName" 
+                      placeholder="Enter client name" 
+                      value={formData.clientName}
+                      onChange={(e) => {
+                        setFormData({ ...formData, clientName: e.target.value });
+                        if (selectedClientId) setSelectedClientId(null);
+                      }}
+                      data-testid="input-client-name" 
+                    />
+                    {selectedClientId && (
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={handleClearClientSelection}
+                        className="shrink-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  {showSuggestions && clientSuggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                      <div className="p-2 text-xs text-muted-foreground border-b">
+                        Existing clients found - click to select
+                      </div>
+                      {clientSuggestions.map((client) => (
+                        <button
+                          key={client.id}
+                          type="button"
+                          className="w-full p-3 text-left hover:bg-muted transition-colors border-b last:border-b-0"
+                          onClick={() => handleSelectClient(client)}
+                          data-testid={`suggestion-client-${client.id}`}
+                        >
+                          <div className="font-medium">{client.name}</div>
+                          <div className="text-sm text-muted-foreground flex gap-3">
+                            {client.phone && <span>{client.phone}</span>}
+                            {client.email && <span>{client.email}</span>}
+                          </div>
+                          {client.address && (
+                            <div className="text-xs text-muted-foreground mt-1">{client.address}</div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {selectedClientId && (
+                  <p className="text-xs text-green-600 mt-1">
+                    Existing client selected - details auto-filled
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -441,7 +550,10 @@ export default function Leads() {
                     id="phone" 
                     placeholder="0400 000 000" 
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, phone: e.target.value });
+                      if (selectedClientId) setSelectedClientId(null);
+                    }}
                     data-testid="input-phone" 
                   />
                 </div>
@@ -463,7 +575,10 @@ export default function Leads() {
                   id="address" 
                   placeholder="Enter site address" 
                   value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, address: e.target.value });
+                    if (selectedClientId) setSelectedClientId(null);
+                  }}
                   data-testid="input-address" 
                 />
               </div>
