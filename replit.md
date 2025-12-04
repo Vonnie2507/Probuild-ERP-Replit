@@ -208,6 +208,14 @@ The numbering logic uses integer-based MAX calculations instead of lexicographic
   - API endpoints: `/api/jobs/:id/setup-document`, `/api/job-setup-documents/:id/section1-5`, `/api/job-setup-documents/:id/section/:number/complete`
   - Database tables: job_setup_documents, job_setup_products
   - JSONB columns for flexible section data storage
+- **Job Fulfillment Type at Lead Level** (NEW):
+  - Added `jobFulfillmentType` field to leads table (supply_only or supply_install)
+  - Job type selector in lead create/edit forms (defaults to supply_install)
+  - Job type badges on LeadCard showing "S+I" for supply_install or "Supply" for supply_only
+  - "View Setup Template" preview dialog accessible from LeadCard dropdown for supply_install leads
+  - Shows read-only preview of the 5-section setup workflow before job conversion
+  - Job creation automatically propagates the job type from the lead
+  - Supply-only jobs skip the Setup & Handover tab in job details
 
 ## Development Notes
 - All pages connected to real backend APIs
