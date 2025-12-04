@@ -169,11 +169,20 @@ export async function registerRoutes(
     }
   });
 
-  // ============ WEATHER (PERTH, WA) ============
-  app.get("/api/weather/perth", async (req, res) => {
+  // ============ WEATHER (WA LOCATIONS) ============
+  const waLocations: Record<string, { name: string; lat: number; lon: number }> = {
+    malaga: { name: "Malaga", lat: -31.8583, lon: 115.8978 },
+    perth: { name: "Perth CBD", lat: -31.9523, lon: 115.8613 },
+    rockingham: { name: "Rockingham", lat: -32.2769, lon: 115.7294 },
+    quinns: { name: "Quinns Rock", lat: -31.6722, lon: 115.7011 },
+  };
+
+  app.get("/api/weather/:location", async (req, res) => {
     try {
-      // Perth coordinates: -31.9523, 115.8613
-      const weatherUrl = "https://api.open-meteo.com/v1/forecast?latitude=-31.9523&longitude=115.8613&current=temperature_2m,relative_humidity_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Australia%2FPerth";
+      const locationKey = req.params.location.toLowerCase();
+      const location = waLocations[locationKey] || waLocations.malaga;
+      
+      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Australia%2FPerth`;
       
       const response = await fetch(weatherUrl);
       if (!response.ok) {
@@ -210,8 +219,8 @@ export async function registerRoutes(
       const weatherCode = data.current?.weather_code || 0;
       const condition = weatherCodeMap[weatherCode] || "Clear";
       
-      const perthWeather = {
-        location: "Perth, WA",
+      const weatherData = {
+        location: location.name,
         temperature: Math.round(data.current?.temperature_2m || 25),
         condition,
         minTemp: Math.round(data.daily?.temperature_2m_min?.[0] || 18),
@@ -219,12 +228,12 @@ export async function registerRoutes(
         humidity: Math.round(data.current?.relative_humidity_2m || 50),
       };
       
-      res.json(perthWeather);
+      res.json(weatherData);
     } catch (error) {
       console.error("Error fetching weather:", error);
       // Return fallback data if API fails
       res.json({
-        location: "Perth, WA",
+        location: "Malaga",
         temperature: 25,
         condition: "Unable to fetch",
         minTemp: 18,
@@ -232,6 +241,14 @@ export async function registerRoutes(
         humidity: 50,
       });
     }
+  });
+
+  // Get available weather locations
+  app.get("/api/weather-locations", (req, res) => {
+    res.json(Object.entries(waLocations).map(([key, val]) => ({
+      id: key,
+      name: val.name,
+    })));
   });
 
   // ============ GLOBAL SEARCH ============

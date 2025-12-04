@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   CheckCircle2, Clock, AlertCircle, Bell, Calendar, Cloud, Sun, CloudRain,
@@ -75,7 +76,18 @@ function TaskStatusIcon({ status }: { status: string }) {
   return <AlertCircle className="h-4 w-4 text-muted-foreground" />;
 }
 
+const WEATHER_LOCATIONS = [
+  { id: "malaga", name: "Malaga" },
+  { id: "perth", name: "Perth CBD" },
+  { id: "rockingham", name: "Rockingham" },
+  { id: "quinns", name: "Quinns Rock" },
+];
+
 function WeatherWidget() {
+  const [selectedLocation, setSelectedLocation] = useState(() => {
+    return localStorage.getItem("weatherLocation") || "malaga";
+  });
+
   const { data: weather, isLoading } = useQuery<{
     location: string;
     temperature: number;
@@ -84,10 +96,15 @@ function WeatherWidget() {
     maxTemp: number;
     humidity: number;
   }>({
-    queryKey: ["/api/weather/perth"],
+    queryKey: ["/api/weather", selectedLocation],
     retry: false,
     staleTime: 1000 * 60 * 30,
   });
+
+  const handleLocationChange = (newLocation: string) => {
+    setSelectedLocation(newLocation);
+    localStorage.setItem("weatherLocation", newLocation);
+  };
 
   if (isLoading) {
     return (
@@ -106,7 +123,7 @@ function WeatherWidget() {
   }
 
   const weatherData = weather || {
-    location: "Perth, WA",
+    location: "Malaga",
     temperature: 24,
     condition: "Sunny",
     minTemp: 18,
@@ -115,18 +132,32 @@ function WeatherWidget() {
   };
 
   const getWeatherIcon = (condition: string) => {
-    if (condition.toLowerCase().includes("rain")) return <CloudRain className="h-10 w-10 text-blue-500" />;
-    if (condition.toLowerCase().includes("cloud")) return <Cloud className="h-10 w-10 text-gray-500" />;
+    if (condition.toLowerCase().includes("rain") || condition.toLowerCase().includes("shower")) return <CloudRain className="h-10 w-10 text-blue-500" />;
+    if (condition.toLowerCase().includes("cloud") || condition.toLowerCase().includes("overcast")) return <Cloud className="h-10 w-10 text-gray-500" />;
+    if (condition.toLowerCase().includes("fog")) return <Cloud className="h-10 w-10 text-gray-400" />;
+    if (condition.toLowerCase().includes("thunder")) return <CloudRain className="h-10 w-10 text-purple-500" />;
     return <Sun className="h-10 w-10 text-yellow-500" />;
   };
 
   return (
     <Card data-testid="widget-weather">
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
         <CardTitle className="text-base flex items-center gap-2">
           <Cloud className="h-4 w-4" />
-          Perth, WA
+          Weather
         </CardTitle>
+        <Select value={selectedLocation} onValueChange={handleLocationChange}>
+          <SelectTrigger className="w-[130px] h-7 text-xs" data-testid="select-weather-location">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {WEATHER_LOCATIONS.map((loc) => (
+              <SelectItem key={loc.id} value={loc.id} data-testid={`option-location-${loc.id}`}>
+                {loc.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </CardHeader>
       <CardContent>
         <div className="flex items-center justify-between">
