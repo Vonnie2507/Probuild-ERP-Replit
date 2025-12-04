@@ -57,6 +57,14 @@ The system employs a modern web architecture with a clear separation of concerns
     -   Publish layouts to make them active for each role
     -   Database tables: dashboard_widgets (widget library), role_dashboard_layouts (layout configs), dashboard_widget_instances (placed widgets)
     -   API routes: /api/dashboard-builder/widgets, /api/dashboard-builder/layouts, /api/dashboard-builder/instances
+-   **Jobs Kanban View:** Visual job tracking with List/Kanban toggle:
+    -   View toggle button (ViewToggle component) switches between List and Kanban views
+    -   Kanban columns organized by job lifecycle: Pipeline, Production, Scheduling, Installation, Complete
+    -   Job cards with colored left borders (yellow for supply_install, green for supply_only)
+    -   Status badges: THIS WEEK (calendar icon), DELAYED (warning), WAITING ON CLIENT (hourglass)
+    -   Stage progress visualization with Lucide icons showing completion state
+    -   Stage complexity varies by job type: supply_install (5 or 8 stages with gate), supply_only (4 stages)
+    -   Components: JobKanbanBoard.tsx, JobKanbanCard.tsx, JobStageProgress.tsx, ViewToggle.tsx
 
 **System Design Choices:**
 -   **API:** All endpoints are prefixed with `/api/` and support standard CRUD operations.
