@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Phone, Mail, MapPin, Clock, MoreHorizontal, Pencil, Trash2, ClipboardList } from "lucide-react";
+import { Phone, Mail, MapPin, Clock, MoreHorizontal, Pencil, Trash2, ClipboardList, Send, FileText } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +11,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+interface QuoteInfo {
+  total: number;
+  sent: number;
+  approved: number;
+}
 
 interface Lead {
   id: string;
@@ -29,6 +40,7 @@ interface Lead {
     initials: string;
   };
   createdAt: string;
+  quoteInfo?: QuoteInfo;
 }
 
 interface LeadCardProps {
@@ -148,9 +160,40 @@ export function LeadCard({
             </Avatar>
             <span className="text-xs text-muted-foreground">{lead.assignedTo.name}</span>
           </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            <span>{lead.createdAt}</span>
+          <div className="flex items-center gap-2">
+            {lead.quoteInfo && lead.quoteInfo.total > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1" data-testid={`quote-indicator-${lead.id}`}>
+                    {lead.quoteInfo.approved > 0 ? (
+                      <Badge variant="default" className="h-5 px-1.5 text-[10px] bg-success text-success-foreground">
+                        <FileText className="h-3 w-3 mr-0.5" />
+                        {lead.quoteInfo.approved}
+                      </Badge>
+                    ) : lead.quoteInfo.sent > 0 ? (
+                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                        <Send className="h-3 w-3 mr-0.5" />
+                        {lead.quoteInfo.sent}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                        <FileText className="h-3 w-3 mr-0.5" />
+                        {lead.quoteInfo.total}
+                      </Badge>
+                    )}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{lead.quoteInfo.total} quote{lead.quoteInfo.total !== 1 ? 's' : ''}</p>
+                  {lead.quoteInfo.sent > 0 && <p>{lead.quoteInfo.sent} sent</p>}
+                  {lead.quoteInfo.approved > 0 && <p>{lead.quoteInfo.approved} approved</p>}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              <span>{lead.createdAt}</span>
+            </div>
           </div>
         </div>
       </CardContent>

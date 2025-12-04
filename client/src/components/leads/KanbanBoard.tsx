@@ -8,6 +8,12 @@ import { LeadCard } from "./LeadCard";
 
 type LeadStatus = "new" | "contacted" | "quoted" | "approved" | "declined";
 
+interface QuoteInfo {
+  total: number;
+  sent: number;
+  approved: number;
+}
+
 interface Lead {
   id: string;
   leadNumber: string;
@@ -25,6 +31,7 @@ interface Lead {
     initials: string;
   };
   createdAt: string;
+  quoteInfo?: QuoteInfo;
 }
 
 interface KanbanColumn {

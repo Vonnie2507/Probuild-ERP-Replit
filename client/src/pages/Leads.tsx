@@ -47,6 +47,12 @@ import type { Lead, Client, InsertLead, Quote, User } from "@shared/schema";
 
 type LeadStatus = "new" | "contacted" | "quoted" | "approved" | "declined";
 
+interface QuoteInfo {
+  total: number;
+  sent: number;
+  approved: number;
+}
+
 interface KanbanLead {
   id: string;
   leadNumber: string;
@@ -64,6 +70,7 @@ interface KanbanLead {
     initials: string;
   };
   createdAt: string;
+  quoteInfo?: QuoteInfo;
 }
 
 export default function Leads() {
@@ -386,6 +393,15 @@ export default function Leads() {
     return { name: fullName, initials };
   };
 
+  const getQuoteInfo = (leadId: string): { total: number; sent: number; approved: number } => {
+    const leadQuotes = quotes.filter(q => q.leadId === leadId);
+    return {
+      total: leadQuotes.length,
+      sent: leadQuotes.filter(q => q.status === "sent").length,
+      approved: leadQuotes.filter(q => q.status === "approved" || q.status === "accepted").length,
+    };
+  };
+
   const kanbanLeads: KanbanLead[] = leads.map((lead) => ({
     id: lead.id,
     leadNumber: lead.leadNumber,
@@ -400,6 +416,7 @@ export default function Leads() {
     status: mapStageToStatus(lead.stage),
     assignedTo: getAssignedUser(lead.assignedTo),
     createdAt: formatTimeAgo(lead.createdAt),
+    quoteInfo: getQuoteInfo(lead.id),
   }));
 
   const handleLeadClick = (lead: KanbanLead) => {
