@@ -52,11 +52,12 @@ A comprehensive ERP & CRM system for Probuild PVC, a Western Australian PVC fenc
 ```
 
 ## Database Schema
-16 main entities:
+18 main entities:
 - users, clients, leads, fenceStyles, products
 - quotes, jobs, bom, productionTasks, installTasks
 - scheduleEvents, payments, notifications, smsLogs, activityLogs, documents
 - quoteFollowUps, automationCampaigns, campaignEnrollments
+- job_setup_documents, job_setup_products (Job Setup & Handover Live Document)
 
 ## API Endpoints
 All endpoints use `/api/` prefix:
@@ -78,6 +79,7 @@ All endpoints use `/api/` prefix:
 7. **Payments**: Stripe integration, deposit/final payment tracking
 8. **Installer App**: Mobile-friendly installer interface
 9. **Trade Portal**: Self-service for trade clients
+10. **Job Setup & Handover**: Live document tracking from sales to installation
 
 ## Hierarchical Numbering System
 The system uses a hierarchical numbering format that links leads, quotes, jobs, and invoices:
@@ -192,6 +194,20 @@ The numbering logic uses integer-based MAX calculations instead of lexicographic
     - Department categorization
   - API endpoints: `/api/organisation/departments`, `/api/organisation/workflows`, `/api/organisation/policies`, `/api/organisation/resources`, `/api/organisation/knowledge`
   - Database tables: departments, workflows, workflow_versions, policies, policy_versions, policy_acknowledgements, resources, knowledge_articles
+- **Job Setup & Handover Live Document** (NEW):
+  - 5-section collapsible accordion workflow for supply+install jobs
+  - **Section 1 - Sales & Site Info**: Site conditions, access, equipment needs, hazards
+  - **Section 2 - Products/BOM**: Auto-populated from quote with product validation
+  - **Section 3 - Production Notes**: Manufacturing checklist (posts, panels, gates, hardware)
+  - **Section 4 - Scheduling**: Install date, time window, team assignment, equipment requirements
+  - **Section 5 - Install Notes & Sign-off**: Pre-start checklist, completion notes, client sign-off
+  - Auto-creation: Documents created automatically when viewing supply_install job Setup tab
+  - Progress tracking: Visual progress bar showing section completion (0-5 sections)
+  - Section completion toggles with validation
+  - "Setup & Handover" tab only visible for supply_install jobs
+  - API endpoints: `/api/jobs/:id/setup-document`, `/api/job-setup-documents/:id/section1-5`, `/api/job-setup-documents/:id/section/:number/complete`
+  - Database tables: job_setup_documents, job_setup_products
+  - JSONB columns for flexible section data storage
 
 ## Development Notes
 - All pages connected to real backend APIs

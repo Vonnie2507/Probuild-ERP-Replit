@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JobCard } from "@/components/jobs/JobCard";
 import { JobTimeline } from "@/components/jobs/JobTimeline";
+import { JobSetupDocument } from "@/components/jobs/JobSetupDocument";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -415,6 +416,9 @@ export default function Jobs() {
               <TabsList>
                 <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
                 <TabsTrigger value="timeline" data-testid="tab-timeline">Timeline</TabsTrigger>
+                {selectedJob.jobType === "supply_install" && (
+                  <TabsTrigger value="setup" data-testid="tab-setup">Setup & Handover</TabsTrigger>
+                )}
                 <TabsTrigger value="materials" data-testid="tab-materials">Materials</TabsTrigger>
                 <TabsTrigger value="documents" data-testid="tab-documents">Documents</TabsTrigger>
                 <TabsTrigger value="photos" data-testid="tab-photos">Photos</TabsTrigger>
@@ -514,6 +518,15 @@ export default function Jobs() {
               <TabsContent value="timeline" className="mt-6">
                 <JobTimeline events={timelineEvents} />
               </TabsContent>
+
+              {selectedJob.jobType === "supply_install" && (
+                <TabsContent value="setup" className="mt-6">
+                  <JobSetupDocument
+                    jobId={String(selectedJob.id)}
+                    jobType={selectedJob.jobType as "supply_only" | "supply_install"}
+                  />
+                </TabsContent>
+              )}
 
               <TabsContent value="materials" className="mt-6">
                 <Card>

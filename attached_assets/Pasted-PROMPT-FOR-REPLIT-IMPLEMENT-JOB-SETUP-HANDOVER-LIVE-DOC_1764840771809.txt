@@ -1,0 +1,263 @@
+PROMPT FOR REPLIT – IMPLEMENT JOB SETUP & HANDOVER LIVE DOCUMENT
+
+You are updating my existing “Probuild PVC ERP & CRM” app.
+
+The goal of this task is to fix the workflow from “Quote Won → Job Setup → Production → Scheduling → Install” by introducing a Job Setup & Handover Live Document for every Supply + Install job.
+
+This feature is about data structure + UI + validation rules + workflow rules. Please implement it end-to-end.
+
+⸻
+
+1. HIGH-LEVEL REQUIREMENTS
+	1.	When a quote is accepted and converted to a job, and the job_type is Supply + Install, automatically create a JobSetupDocument record linked to that job.
+	2.	The JobSetupDocument is a live document that moves through multiple sections (filled by different roles):
+	•	Section 1 – Sales Setup (during booking / quote acceptance)
+	•	Section 2 – Product List / BOM
+	•	Section 3 – Production Handover
+	•	Section 4 – Scheduling Setup
+	•	Section 5 – Installer Checklist & Client Signoff
+	3.	A job cannot move forward to certain stages unless its JobSetupDocument is complete for that stage (hard validation).
+	4.	The UI should make this feel like one structured “Job Setup” tab inside the Job screen, with sub-sections and progress indicators.
+	5.	This is specifically for Supply + Install jobs, but the structure should be reusable later for other job types.
+
+⸻
+
+2. DATA MODEL – NEW ENTITY: JobSetupDocument
+
+Create a new entity/table: JobSetupDocument.
+
+Basic fields:
+	•	id
+	•	job_id (foreign key to existing Job entity)
+	•	job_type (string or enum – copy from Job, e.g. “Supply + Install”)
+	•	status (enum: draft, in_progress, ready_for_production, ready_for_scheduling, ready_for_install, completed)
+	•	created_at, updated_at
+	•	created_by
+
+2.1 SECTION 1 – Sales Setup (Site Conditions & Requirements)
+
+Add a nested structure or fields (you can use JSON columns or a separate table – choose what fits the existing architecture best). These will be filled by Sales during the initial call / quote acceptance.
+
+Fields:
+
+Property & Access
+	•	old_fence_being_removed (boolean)
+	•	old_fence_material (string: wood, Colorbond, limestone, brick, other)
+	•	old_fence_age_years (string or number; e.g. “10–20 years”)
+	•	all_footings_removed (boolean)
+	•	retic_in_ground (boolean)
+	•	retic_notes (string)
+	•	underground_services_known (boolean)
+	•	underground_services_notes (string)
+	•	pool_area (boolean)
+	•	dogs_on_site (boolean)
+	•	locked_gates_or_restricted_access (boolean)
+	•	someone_home_on_install_day (boolean)
+	•	driveway_access_description (string)
+	•	steep_or_sloping_site (boolean)
+	•	site_hazards_notes (string)
+
+Equipment Required (based on conversation)
+	•	needs_core_drill (boolean)
+	•	needs_chainsaw (boolean)
+	•	needs_auger (boolean)
+	•	needs_skip_bin (boolean)
+	•	needs_extra_labor (boolean)
+	•	equipment_other_notes (string)
+
+Measurements / Fence Layout
+	•	fence_total_metres (number)
+	•	fence_height_mm (number)
+	•	num_gates (number)
+	•	gate_openings_description (string)
+	•	raked_or_stepped (string)
+	•	panels_layout_notes (string)
+
+Site Plan / Visual
+	•	site_plan_image_url (string) – allow upload of a sketch, photo or simple plan
+	•	additional_photos_urls (array of strings or related table)
+
+Client Confirmation
+	•	client_confirmation_text (string – default to a standard disclaimer about footings, retic, services and extra charges)
+	•	client_signed_sales_setup (boolean)
+	•	client_signed_at (datetime)
+	•	If you already use e-signatures, link that object; otherwise just store boolean + timestamp.
+
+Validation rule:
+	•	Section 1 is considered complete when:
+	•	old_fence_being_removed, all_footings_removed, retic_in_ground, underground_services_known, pool_area, driveway_access_description are filled
+	•	At least one of site_plan_image_url or additional_photos_urls is present
+	•	client_signed_sales_setup is true
+
+2.2 SECTION 2 – Product List / BOM
+
+This section ties to the job’s fence style and quote line items.
+
+Create either:
+	•	a JobSetupProduct table linked to job_setup_document_id, or
+	•	reuse existing BOM/product line records but reference them from JobSetupDocument.
+
+Fields for each product line:
+	•	product_id or product_name
+	•	category (post, rail, panel, cap, gate, hardware, accessory, cement, pallet, etc.)
+	•	quantity
+	•	notes (e.g. custom cap, colour, special routing)
+
+This section should support:
+	•	auto-population from the accepted quote
+	•	manual adjustments by production or sales
+
+Validation rule:
+	•	For Supply + Install jobs, require at least:
+	•	posts, rails, panels, caps, gate (if applicable), hardware
+	•	all with non-null quantities
+	•	Section 2 is complete when there are no product lines with empty quantity.
+
+2.3 SECTION 3 – Production Handover
+
+Fields (boolean flags + notes):
+	•	posts_manufactured (boolean)
+	•	panels_manufactured (boolean)
+	•	gates_fabricated (boolean)
+	•	hardware_packed (boolean)
+	•	accessories_packed (boolean)
+	•	cement_and_materials_prepared (boolean)
+	•	production_special_notes (string)
+	•	production_completed_by (user id)
+	•	production_completed_at (datetime)
+
+Validation rule:
+	•	JobSetupDocument cannot move to ready_for_scheduling until:
+	•	all booleans above are true
+	•	Section 1 and Section 2 are already marked complete.
+
+2.4 SECTION 4 – Scheduling Setup (Craig)
+
+Fields:
+	•	scheduling_ready_for_install (boolean)
+	•	proposed_install_date (date)
+	•	confirm_install_date_with_client (boolean)
+	•	install_time_window (string)
+	•	installer_team_assigned (string or installer id)
+	•	is_supply_only_pickup (boolean; should be false for Supply + Install, but keep for reuse)
+	•	pickup_or_delivery_notes (string)
+	•	scheduler_notes (string)
+	•	scheduled_by (user id)
+	•	scheduled_at (datetime)
+
+Equipment summary (derived from Section 1 & 2):
+	•	requires_core_drill
+	•	requires_chainsaw
+	•	requires_auger
+	•	requires_skip_bin
+	•	This can either be copied into this section for visibility or just displayed in the UI from Section 1.
+
+Validation rule:
+	•	Cannot mark scheduling_ready_for_install = true unless Production section is complete.
+	•	Job status in the main Job entity should be updated (e.g. “Ready for Install”) when this flag is true.
+
+2.5 SECTION 5 – Installer Checklist & Client Signoff
+
+Fields for installer pre-start checklist:
+	•	installer_checked_materials_complete (boolean)
+	•	installer_checked_tools_loaded (boolean)
+	•	installer_confirmed_site_access_ok (boolean)
+	•	installer_read_site_notes (boolean)
+	•	installer_prestart_notes (string)
+	•	installer_prestart_completed_by (user id)
+	•	installer_prestart_completed_at (datetime)
+
+Fields for completion on site:
+	•	install_completed (boolean)
+	•	install_photos_urls (array or related records)
+	•	completion_notes (string)
+	•	client_signed_completion (boolean)
+	•	client_signed_completion_at (datetime)
+	•	installer_completion_by (user id)
+	•	installer_completion_at (datetime)
+
+Validation rule:
+	•	JobSetupDocument becomes status = completed when:
+	•	install_completed is true
+	•	client_signed_completion is true
+
+⸻
+
+3. WORKFLOW / STATE RULES
+
+Tie the JobSetupDocument status into the existing Job workflow.
+
+Example mapping (adapt to current Job statuses):
+	•	When quote converts to job (Supply + Install):
+	•	Create JobSetupDocument with status = draft.
+	•	When Section 1 and Section 2 are complete:
+	•	Set status = in_progress.
+	•	When Production Handover is fully checked:
+	•	Set status = ready_for_scheduling.
+	•	When Scheduling section is marked ready:
+	•	Set status = ready_for_install.
+	•	When Installer completion and client signoff are done:
+	•	Set status = completed.
+
+Also:
+	•	Prevent changing Job status to “In Production” / “Ready for Install” / “Completed” unless the corresponding JobSetupDocument status is appropriate.
+	•	If a user tries to move the Job stage prematurely, show a clear error:
+“Job Setup & Handover document is incomplete. Please finish Sales Setup / Product List / Production / Scheduling sections first.”
+
+⸻
+
+4. UI IMPLEMENTATION
+
+In the Job module:
+	1.	Add a new tab or section called “Job Setup & Handover” for each Job.
+	2.	Inside this tab, show the JobSetupDocument structured as 5 collapsible sections:
+	•	Sales Setup
+	•	Product List / BOM
+	•	Production Handover
+	•	Scheduling Setup
+	•	Installer Checklist & Signoff
+	3.	For each section:
+	•	Display form fields as described above.
+	•	Show a small status indicator (e.g. “Not started / In progress / Complete”).
+	•	For roles:
+	•	Sales can edit Section 1 + Product notes before handover.
+	•	Production can edit Section 2 (quantities, extra items) + Section 3.
+	•	Scheduler (Craig) can only edit Section 4.
+	•	Installers can only edit Section 5.
+	•	Admin/Owners can edit all sections.
+	4.	Show a progress bar at the top summarising overall completion (based on how many sections are complete).
+	5.	On the Job list or detail header, add a small badge like:
+	•	“Setup: 3/5 sections complete”
+	•	This lets Craig and Sales instantly see readiness.
+
+⸻
+
+5. PERMISSIONS
+
+Hook into your existing roles system:
+	•	Sales:
+	•	Can create/edit Section 1 and initial Product List before Production starts.
+	•	Production team / Production Manager:
+	•	Can edit Product List quantities and Section 3.
+	•	Scheduler (Craig):
+	•	Can edit Section 4 only.
+	•	Installers:
+	•	Can view everything but only edit Section 5.
+	•	Admin/Owners:
+	•	Full access.
+
+If your auth/roles layer already exists, please wire the forms accordingly so users can only edit their relevant sections.
+
+⸻
+
+6. TECHNICAL NOTES
+	•	Use existing patterns in the project for:
+	•	Entities/schemas
+	•	API routes
+	•	Forms and validation
+	•	Role guards
+	•	The JobSetupDocument should be fetched and saved via API, not only in local state.
+	•	Design with the assumption that later we may:
+	•	Attach AI call transcription into Section 1 automatically.
+	•	Attach PO/ETA info into Production and Scheduling sections.
+	•	The implementation should be clean and modular so these future additions are easy.

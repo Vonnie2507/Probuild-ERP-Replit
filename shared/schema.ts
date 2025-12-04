@@ -128,6 +128,40 @@ export const scheduleEventTypeEnum = pgEnum("schedule_event_type", [
   "production"
 ]);
 
+// Job Setup Document status enum
+export const jobSetupStatusEnum = pgEnum("job_setup_status", [
+  "draft",
+  "in_progress",
+  "ready_for_production",
+  "ready_for_scheduling",
+  "ready_for_install",
+  "completed"
+]);
+
+// Old fence material enum for job setup
+export const oldFenceMaterialEnum = pgEnum("old_fence_material", [
+  "wood",
+  "colorbond",
+  "limestone",
+  "brick",
+  "other",
+  "none"
+]);
+
+// Job setup product category enum
+export const jobSetupProductCategoryEnum = pgEnum("job_setup_product_category", [
+  "post",
+  "rail",
+  "panel",
+  "cap",
+  "gate",
+  "hardware",
+  "accessory",
+  "cement",
+  "pallet",
+  "other"
+]);
+
 // Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -308,6 +342,166 @@ export type BOMItem = {
   cutLength?: number;
   notes?: string;
 };
+
+// ============================================
+// JOB SETUP DOCUMENT TYPES (JSONB Sections)
+// ============================================
+
+// Section 1: Sales Setup - Site Conditions & Requirements
+export type JobSetupSection1Sales = {
+  // Property & Access
+  oldFenceBeingRemoved?: boolean;
+  oldFenceMaterial?: string;
+  oldFenceAgeYears?: string;
+  allFootingsRemoved?: boolean;
+  reticInGround?: boolean;
+  reticNotes?: string;
+  undergroundServicesKnown?: boolean;
+  undergroundServicesNotes?: string;
+  poolArea?: boolean;
+  dogsOnSite?: boolean;
+  lockedGatesOrRestrictedAccess?: boolean;
+  someoneHomeOnInstallDay?: boolean;
+  drivewayAccessDescription?: string;
+  steepOrSlopingSite?: boolean;
+  siteHazardsNotes?: string;
+  
+  // Equipment Required
+  needsCoreDrill?: boolean;
+  needsChainsaw?: boolean;
+  needsAuger?: boolean;
+  needsSkipBin?: boolean;
+  needsExtraLabor?: boolean;
+  equipmentOtherNotes?: string;
+  
+  // Measurements / Fence Layout
+  fenceTotalMetres?: number;
+  fenceHeightMm?: number;
+  numGates?: number;
+  gateOpeningsDescription?: string;
+  rakedOrStepped?: string;
+  panelsLayoutNotes?: string;
+  
+  // Site Plan / Visual
+  sitePlanImageUrl?: string;
+  additionalPhotosUrls?: string[];
+  
+  // Client Confirmation
+  clientConfirmationText?: string;
+  clientSignedSalesSetup?: boolean;
+  clientSignedAt?: string;
+};
+
+// Section 2: Product List / BOM metadata (actual products in job_setup_products table)
+export type JobSetupSection2ProductsMeta = {
+  autoPopulatedFromQuote?: boolean;
+  quoteId?: string;
+  lastUpdatedBy?: string;
+  lastUpdatedAt?: string;
+  notes?: string;
+};
+
+// Section 3: Production Handover
+export type JobSetupSection3Production = {
+  postsManufactured?: boolean;
+  panelsManufactured?: boolean;
+  gatesFabricated?: boolean;
+  hardwarePacked?: boolean;
+  accessoriesPacked?: boolean;
+  cementAndMaterialsPrepared?: boolean;
+  productionSpecialNotes?: string;
+  productionCompletedBy?: string;
+  productionCompletedAt?: string;
+};
+
+// Section 4: Scheduling Setup
+export type JobSetupSection4Schedule = {
+  schedulingReadyForInstall?: boolean;
+  proposedInstallDate?: string;
+  confirmInstallDateWithClient?: boolean;
+  installTimeWindow?: string;
+  installerTeamAssigned?: string;
+  isSupplyOnlyPickup?: boolean;
+  pickupOrDeliveryNotes?: string;
+  schedulerNotes?: string;
+  scheduledBy?: string;
+  scheduledAt?: string;
+  
+  // Equipment summary (derived from Section 1 for visibility)
+  requiresCoreDrill?: boolean;
+  requiresChainsaw?: boolean;
+  requiresAuger?: boolean;
+  requiresSkipBin?: boolean;
+};
+
+// Section 5: Installer Checklist & Client Signoff
+export type JobSetupSection5Install = {
+  // Pre-start checklist
+  installerCheckedMaterialsComplete?: boolean;
+  installerCheckedToolsLoaded?: boolean;
+  installerConfirmedSiteAccessOk?: boolean;
+  installerReadSiteNotes?: boolean;
+  installerPrestartNotes?: string;
+  installerPrestartCompletedBy?: string;
+  installerPrestartCompletedAt?: string;
+  
+  // Completion on site
+  installCompleted?: boolean;
+  installPhotosUrls?: string[];
+  completionNotes?: string;
+  clientSignedCompletion?: boolean;
+  clientSignedCompletionAt?: string;
+  installerCompletionBy?: string;
+  installerCompletionAt?: string;
+};
+
+// ============================================
+// JOB SETUP DOCUMENT TABLES
+// ============================================
+
+// Job Setup Documents - main document table
+export const jobSetupDocuments = pgTable("job_setup_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => jobs.id).notNull().unique(),
+  jobType: jobTypeEnum("job_type").notNull(),
+  status: jobSetupStatusEnum("status").notNull().default("draft"),
+  
+  // Section completion flags
+  section1Complete: boolean("section1_complete").default(false),
+  section2Complete: boolean("section2_complete").default(false),
+  section3Complete: boolean("section3_complete").default(false),
+  section4Complete: boolean("section4_complete").default(false),
+  section5Complete: boolean("section5_complete").default(false),
+  
+  // JSONB sections
+  section1Sales: jsonb("section1_sales").$type<JobSetupSection1Sales>(),
+  section2ProductsMeta: jsonb("section2_products_meta").$type<JobSetupSection2ProductsMeta>(),
+  section3Production: jsonb("section3_production").$type<JobSetupSection3Production>(),
+  section4Schedule: jsonb("section4_schedule").$type<JobSetupSection4Schedule>(),
+  section5Install: jsonb("section5_install").$type<JobSetupSection5Install>(),
+  
+  // Audit fields
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Job Setup Products - BOM items for the job setup document
+export const jobSetupProducts = pgTable("job_setup_products", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobSetupDocumentId: varchar("job_setup_document_id").references(() => jobSetupDocuments.id).notNull(),
+  productId: varchar("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  sku: text("sku"),
+  category: jobSetupProductCategoryEnum("category").notNull(),
+  quantity: integer("quantity").notNull().default(0),
+  unitInfo: text("unit_info"),
+  notes: text("notes"),
+  sourceQuoteLineId: varchar("source_quote_line_id"),
+  addedBy: varchar("added_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
 
 // Production Tasks table
 export const productionTasks = pgTable("production_tasks", {
@@ -1342,3 +1536,119 @@ export type VisualFlow = typeof visualFlows.$inferSelect;
 
 export type InsertResource = z.infer<typeof insertResourceSchema>;
 export type Resource = typeof resources.$inferSelect;
+
+// ============================================
+// JOB SETUP DOCUMENT INSERT SCHEMAS
+// ============================================
+
+export const insertJobSetupDocumentSchema = createInsertSchema(jobSetupDocuments).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true 
+});
+
+export const insertJobSetupProductSchema = createInsertSchema(jobSetupProducts).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true 
+});
+
+// Zod schemas for section validation
+export const section1SalesSchema = z.object({
+  oldFenceBeingRemoved: z.boolean().optional(),
+  oldFenceMaterial: z.string().optional(),
+  oldFenceAgeYears: z.string().optional(),
+  allFootingsRemoved: z.boolean().optional(),
+  reticInGround: z.boolean().optional(),
+  reticNotes: z.string().optional(),
+  undergroundServicesKnown: z.boolean().optional(),
+  undergroundServicesNotes: z.string().optional(),
+  poolArea: z.boolean().optional(),
+  dogsOnSite: z.boolean().optional(),
+  lockedGatesOrRestrictedAccess: z.boolean().optional(),
+  someoneHomeOnInstallDay: z.boolean().optional(),
+  drivewayAccessDescription: z.string().optional(),
+  steepOrSlopingSite: z.boolean().optional(),
+  siteHazardsNotes: z.string().optional(),
+  needsCoreDrill: z.boolean().optional(),
+  needsChainsaw: z.boolean().optional(),
+  needsAuger: z.boolean().optional(),
+  needsSkipBin: z.boolean().optional(),
+  needsExtraLabor: z.boolean().optional(),
+  equipmentOtherNotes: z.string().optional(),
+  fenceTotalMetres: z.number().optional(),
+  fenceHeightMm: z.number().optional(),
+  numGates: z.number().optional(),
+  gateOpeningsDescription: z.string().optional(),
+  rakedOrStepped: z.string().optional(),
+  panelsLayoutNotes: z.string().optional(),
+  sitePlanImageUrl: z.string().optional(),
+  additionalPhotosUrls: z.array(z.string()).optional(),
+  clientConfirmationText: z.string().optional(),
+  clientSignedSalesSetup: z.boolean().optional(),
+  clientSignedAt: z.string().optional(),
+});
+
+export const section2ProductsMetaSchema = z.object({
+  autoPopulatedFromQuote: z.boolean().optional(),
+  quoteId: z.string().optional(),
+  lastUpdatedBy: z.string().optional(),
+  lastUpdatedAt: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const section3ProductionSchema = z.object({
+  postsManufactured: z.boolean().optional(),
+  panelsManufactured: z.boolean().optional(),
+  gatesFabricated: z.boolean().optional(),
+  hardwarePacked: z.boolean().optional(),
+  accessoriesPacked: z.boolean().optional(),
+  cementAndMaterialsPrepared: z.boolean().optional(),
+  productionSpecialNotes: z.string().optional(),
+  productionCompletedBy: z.string().optional(),
+  productionCompletedAt: z.string().optional(),
+});
+
+export const section4ScheduleSchema = z.object({
+  schedulingReadyForInstall: z.boolean().optional(),
+  proposedInstallDate: z.string().optional(),
+  confirmInstallDateWithClient: z.boolean().optional(),
+  installTimeWindow: z.string().optional(),
+  installerTeamAssigned: z.string().optional(),
+  isSupplyOnlyPickup: z.boolean().optional(),
+  pickupOrDeliveryNotes: z.string().optional(),
+  schedulerNotes: z.string().optional(),
+  scheduledBy: z.string().optional(),
+  scheduledAt: z.string().optional(),
+  requiresCoreDrill: z.boolean().optional(),
+  requiresChainsaw: z.boolean().optional(),
+  requiresAuger: z.boolean().optional(),
+  requiresSkipBin: z.boolean().optional(),
+});
+
+export const section5InstallSchema = z.object({
+  installerCheckedMaterialsComplete: z.boolean().optional(),
+  installerCheckedToolsLoaded: z.boolean().optional(),
+  installerConfirmedSiteAccessOk: z.boolean().optional(),
+  installerReadSiteNotes: z.boolean().optional(),
+  installerPrestartNotes: z.string().optional(),
+  installerPrestartCompletedBy: z.string().optional(),
+  installerPrestartCompletedAt: z.string().optional(),
+  installCompleted: z.boolean().optional(),
+  installPhotosUrls: z.array(z.string()).optional(),
+  completionNotes: z.string().optional(),
+  clientSignedCompletion: z.boolean().optional(),
+  clientSignedCompletionAt: z.string().optional(),
+  installerCompletionBy: z.string().optional(),
+  installerCompletionAt: z.string().optional(),
+});
+
+// ============================================
+// JOB SETUP DOCUMENT TYPES
+// ============================================
+
+export type InsertJobSetupDocument = z.infer<typeof insertJobSetupDocumentSchema>;
+export type JobSetupDocument = typeof jobSetupDocuments.$inferSelect;
+
+export type InsertJobSetupProduct = z.infer<typeof insertJobSetupProductSchema>;
+export type JobSetupProduct = typeof jobSetupProducts.$inferSelect;

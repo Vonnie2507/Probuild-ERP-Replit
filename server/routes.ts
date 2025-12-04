@@ -10,7 +10,10 @@ import {
   insertSMSConversationSchema, insertMessageRangeSchema,
   insertDepartmentSchema, insertWorkflowSchema, insertWorkflowVersionSchema,
   insertPolicySchema, insertPolicyVersionSchema, insertPolicyAcknowledgementSchema,
-  insertResourceSchema, insertKnowledgeArticleSchema
+  insertResourceSchema, insertKnowledgeArticleSchema,
+  insertJobSetupDocumentSchema, insertJobSetupProductSchema,
+  section1SalesSchema, section2ProductsMetaSchema, section3ProductionSchema,
+  section4ScheduleSchema, section5InstallSchema
 } from "@shared/schema";
 import { z } from "zod";
 import Stripe from "stripe";
@@ -548,11 +551,12 @@ export async function registerRoutes(
 
       // Get next job number and create job
       const jobNumber = await storage.getNextJobNumber();
+      const jobType = req.body.jobType || "supply_install";
       const jobData = {
         jobNumber,
         clientId: quote.clientId,
         quoteId: quote.id,
-        jobType: req.body.jobType || "supply_install",
+        jobType: jobType,
         siteAddress: quote.siteAddress || "",
         status: "awaiting_deposit" as const,
         fenceStyle: req.body.fenceStyle,
@@ -574,6 +578,30 @@ export async function registerRoutes(
           paymentType: "deposit",
           status: "pending",
         });
+      }
+
+      // Auto-create Job Setup Document for supply+install jobs
+      if (jobType === "supply_install") {
+        try {
+          const setupDocument = await storage.createJobSetupDocument({
+            jobId: job.id,
+            jobType: jobType,
+            status: "draft",
+            section1Sales: {},
+            section2ProductsMeta: {},
+            section3Production: {},
+            section4Schedule: {},
+            section5Install: {},
+          } as any);
+
+          // Seed BOM products from quote line items
+          if (quote.lineItems && Array.isArray(quote.lineItems) && quote.lineItems.length > 0) {
+            await storage.seedJobSetupProductsFromQuote(setupDocument.id, quote.id);
+          }
+        } catch (setupError) {
+          // Log but don't fail the job creation
+          console.error("Error creating job setup document:", setupError);
+        }
       }
 
       res.status(201).json(job);
@@ -643,8 +671,68 @@ export async function registerRoutes(
   // Update job status
   app.patch("/api/jobs/:id/status", async (req, res) => {
     try {
-      const { status } = req.body;
+      const { status, bypassValidation } = req.body;
       const oldJob = await storage.getJob(req.params.id);
+      if (!oldJob) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      // Validate setup document completion for supply+install jobs (unless bypassed)
+      if (oldJob.jobType === "supply_install" && !bypassValidation) {
+        const statusRequirements: Record<string, { sections: number[]; message: string }> = {
+          "in_production": { 
+            sections: [1, 2], 
+            message: "Sections 1 (Sales Info) and 2 (Products) must be completed before production" 
+          },
+          "manufacturing_panels": { 
+            sections: [1, 2], 
+            message: "Sections 1 (Sales Info) and 2 (Products) must be completed before production" 
+          },
+          "ready_for_install": { 
+            sections: [1, 2, 3, 4], 
+            message: "Sections 1-4 must be completed before marking ready for install" 
+          },
+          "scheduled": { 
+            sections: [1, 2, 3, 4], 
+            message: "Sections 1-4 must be completed before scheduling" 
+          },
+          "installing": { 
+            sections: [1, 2, 3, 4], 
+            message: "Sections 1-4 must be completed before install can begin" 
+          },
+          "completed": { 
+            sections: [1, 2, 3, 4, 5], 
+            message: "All sections must be completed before marking job complete" 
+          },
+        };
+
+        const requirements = statusRequirements[status];
+        if (requirements) {
+          const document = await storage.getJobSetupDocumentByJob(oldJob.id);
+          if (!document) {
+            return res.status(400).json({ 
+              error: "Job setup document must be created and completed before changing status",
+              requiresSetupDocument: true
+            });
+          }
+
+          const incompleteSections: number[] = [];
+          if (requirements.sections.includes(1) && !document.section1Complete) incompleteSections.push(1);
+          if (requirements.sections.includes(2) && !document.section2Complete) incompleteSections.push(2);
+          if (requirements.sections.includes(3) && !document.section3Complete) incompleteSections.push(3);
+          if (requirements.sections.includes(4) && !document.section4Complete) incompleteSections.push(4);
+          if (requirements.sections.includes(5) && !document.section5Complete) incompleteSections.push(5);
+
+          if (incompleteSections.length > 0) {
+            return res.status(400).json({ 
+              error: requirements.message,
+              incompleteSections,
+              requiredSections: requirements.sections
+            });
+          }
+        }
+      }
+
       const job = await storage.updateJob(req.params.id, { status });
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
@@ -3228,6 +3316,437 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting article:", error);
       res.status(500).json({ error: "Failed to delete article" });
+    }
+  });
+
+  // ============ JOB SETUP DOCUMENTS ============
+
+  // Get all job setup documents
+  app.get("/api/job-setup-documents", async (req, res) => {
+    try {
+      const { status } = req.query;
+      let documents;
+      if (status && typeof status === "string") {
+        documents = await storage.getJobSetupDocumentsByStatus(status);
+      } else {
+        documents = await storage.getJobSetupDocuments();
+      }
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching job setup documents:", error);
+      res.status(500).json({ error: "Failed to fetch job setup documents" });
+    }
+  });
+
+  // Get a specific job setup document by ID
+  app.get("/api/job-setup-documents/:id", async (req, res) => {
+    try {
+      const document = await storage.getJobSetupDocument(req.params.id);
+      if (!document) {
+        return res.status(404).json({ error: "Job setup document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      console.error("Error fetching job setup document:", error);
+      res.status(500).json({ error: "Failed to fetch job setup document" });
+    }
+  });
+
+  // Get job setup document by job ID (auto-creates for supply_install jobs if not exists)
+  app.get("/api/jobs/:jobId/setup-document", async (req, res) => {
+    try {
+      let document = await storage.getJobSetupDocumentByJob(req.params.jobId);
+      
+      // If no document exists, auto-create one for supply_install jobs
+      if (!document) {
+        const job = await storage.getJob(req.params.jobId);
+        if (!job) {
+          return res.status(404).json({ error: "Job not found" });
+        }
+        
+        if (job.jobType === "supply_install") {
+          // Auto-create the setup document
+          document = await storage.createJobSetupDocument({
+            jobId: job.id,
+            quoteId: job.quoteId,
+            jobType: job.jobType,
+            status: "in_progress",
+            section1Sales: {},
+            section2ProductsMeta: { autoPopulatedFromQuote: false },
+            section3Production: {},
+            section4Schedule: {},
+            section5Install: {},
+            section1Complete: false,
+            section2Complete: false,
+            section3Complete: false,
+            section4Complete: false,
+            section5Complete: false,
+          } as any);
+          
+          // If there's a quote, seed products from it
+          if (job.quoteId) {
+            await storage.seedJobSetupProductsFromQuote(document.id, job.quoteId);
+            // Update meta to indicate auto-population
+            document = await storage.updateJobSetupDocument(document.id, {
+              section2ProductsMeta: { autoPopulatedFromQuote: true }
+            });
+          }
+        } else {
+          return res.status(404).json({ error: "Job setup document not found" });
+        }
+      }
+      
+      // Also fetch the products for this document
+      const products = await storage.getJobSetupProductsByDocument(document!.id);
+      res.json({ ...document, products });
+    } catch (error) {
+      console.error("Error fetching job setup document:", error);
+      res.status(500).json({ error: "Failed to fetch job setup document" });
+    }
+  });
+
+  // Create a new job setup document
+  app.post("/api/job-setup-documents", async (req, res) => {
+    try {
+      const validatedData = insertJobSetupDocumentSchema.parse(req.body);
+      const document = await storage.createJobSetupDocument(validatedData);
+      res.status(201).json(document);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating job setup document:", error);
+      res.status(500).json({ error: "Failed to create job setup document" });
+    }
+  });
+
+  // Update a job setup document
+  app.patch("/api/job-setup-documents/:id", async (req, res) => {
+    try {
+      const validatedData = insertJobSetupDocumentSchema.partial().parse(req.body);
+      const document = await storage.updateJobSetupDocument(req.params.id, validatedData);
+      if (!document) {
+        return res.status(404).json({ error: "Job setup document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating job setup document:", error);
+      res.status(500).json({ error: "Failed to update job setup document" });
+    }
+  });
+
+  // Delete a job setup document
+  app.delete("/api/job-setup-documents/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteJobSetupDocument(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Job setup document not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting job setup document:", error);
+      res.status(500).json({ error: "Failed to delete job setup document" });
+    }
+  });
+
+  // ============ JOB SETUP SECTIONS ============
+
+  // Update Section 1 (Sales Info)
+  app.patch("/api/job-setup-documents/:id/section1", async (req, res) => {
+    try {
+      const validatedData = section1SalesSchema.parse(req.body);
+      const document = await storage.updateJobSetupSection1(req.params.id, validatedData);
+      if (!document) {
+        return res.status(404).json({ error: "Job setup document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating section 1:", error);
+      res.status(500).json({ error: "Failed to update section 1" });
+    }
+  });
+
+  // Update Section 2 Meta (Products metadata)
+  app.patch("/api/job-setup-documents/:id/section2-meta", async (req, res) => {
+    try {
+      const validatedData = section2ProductsMetaSchema.parse(req.body);
+      const document = await storage.updateJobSetupSection2Meta(req.params.id, validatedData);
+      if (!document) {
+        return res.status(404).json({ error: "Job setup document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating section 2 meta:", error);
+      res.status(500).json({ error: "Failed to update section 2 meta" });
+    }
+  });
+
+  // Update Section 3 (Production)
+  app.patch("/api/job-setup-documents/:id/section3", async (req, res) => {
+    try {
+      const validatedData = section3ProductionSchema.parse(req.body);
+      const document = await storage.updateJobSetupSection3(req.params.id, validatedData);
+      if (!document) {
+        return res.status(404).json({ error: "Job setup document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating section 3:", error);
+      res.status(500).json({ error: "Failed to update section 3" });
+    }
+  });
+
+  // Update Section 4 (Schedule)
+  app.patch("/api/job-setup-documents/:id/section4", async (req, res) => {
+    try {
+      const validatedData = section4ScheduleSchema.parse(req.body);
+      const document = await storage.updateJobSetupSection4(req.params.id, validatedData);
+      if (!document) {
+        return res.status(404).json({ error: "Job setup document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating section 4:", error);
+      res.status(500).json({ error: "Failed to update section 4" });
+    }
+  });
+
+  // Update Section 5 (Install Notes)
+  app.patch("/api/job-setup-documents/:id/section5", async (req, res) => {
+    try {
+      const validatedData = section5InstallSchema.parse(req.body);
+      const document = await storage.updateJobSetupSection5(req.params.id, validatedData);
+      if (!document) {
+        return res.status(404).json({ error: "Job setup document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating section 5:", error);
+      res.status(500).json({ error: "Failed to update section 5" });
+    }
+  });
+
+  // Mark section as complete/incomplete
+  app.post("/api/job-setup-documents/:id/section/:sectionNumber/complete", async (req, res) => {
+    try {
+      const sectionNumber = parseInt(req.params.sectionNumber);
+      if (sectionNumber < 1 || sectionNumber > 5) {
+        return res.status(400).json({ error: "Invalid section number. Must be 1-5" });
+      }
+      const { complete } = req.body;
+      if (typeof complete !== "boolean") {
+        return res.status(400).json({ error: "complete field must be a boolean" });
+      }
+      const document = await storage.markSectionComplete(req.params.id, sectionNumber as 1 | 2 | 3 | 4 | 5, complete);
+      if (!document) {
+        return res.status(404).json({ error: "Job setup document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      console.error("Error marking section complete:", error);
+      res.status(500).json({ error: "Failed to mark section complete" });
+    }
+  });
+
+  // Recalculate document status
+  app.post("/api/job-setup-documents/:id/recalculate-status", async (req, res) => {
+    try {
+      const document = await storage.recalculateDocumentStatus(req.params.id);
+      if (!document) {
+        return res.status(404).json({ error: "Job setup document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      console.error("Error recalculating status:", error);
+      res.status(500).json({ error: "Failed to recalculate status" });
+    }
+  });
+
+  // ============ JOB SETUP PRODUCTS ============
+
+  // Get products for a document
+  app.get("/api/job-setup-documents/:id/products", async (req, res) => {
+    try {
+      const products = await storage.getJobSetupProductsByDocument(req.params.id);
+      res.json(products);
+    } catch (error) {
+      console.error("Error fetching job setup products:", error);
+      res.status(500).json({ error: "Failed to fetch job setup products" });
+    }
+  });
+
+  // Add a product to a document
+  app.post("/api/job-setup-documents/:documentId/products", async (req, res) => {
+    try {
+      const data = { ...req.body, jobSetupDocumentId: req.params.documentId };
+      // Convert empty strings to null for optional FK fields
+      if (data.productId === "") data.productId = null;
+      if (data.addedBy === "") data.addedBy = null;
+      if (data.sourceQuoteLineId === "") data.sourceQuoteLineId = null;
+      const validatedData = insertJobSetupProductSchema.parse(data);
+      const product = await storage.createJobSetupProduct(validatedData);
+      res.status(201).json(product);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating job setup product:", error);
+      res.status(500).json({ error: "Failed to create job setup product" });
+    }
+  });
+
+  // Update a product
+  app.patch("/api/job-setup-products/:id", async (req, res) => {
+    try {
+      const data = { ...req.body };
+      // Convert empty strings to null for optional FK fields
+      if (data.productId === "") data.productId = null;
+      if (data.addedBy === "") data.addedBy = null;
+      if (data.sourceQuoteLineId === "") data.sourceQuoteLineId = null;
+      const validatedData = insertJobSetupProductSchema.partial().parse(data);
+      const product = await storage.updateJobSetupProduct(req.params.id, validatedData);
+      if (!product) {
+        return res.status(404).json({ error: "Job setup product not found" });
+      }
+      res.json(product);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating job setup product:", error);
+      res.status(500).json({ error: "Failed to update job setup product" });
+    }
+  });
+
+  // Delete a product
+  app.delete("/api/job-setup-products/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteJobSetupProduct(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Job setup product not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting job setup product:", error);
+      res.status(500).json({ error: "Failed to delete job setup product" });
+    }
+  });
+
+  // Seed products from quote
+  app.post("/api/job-setup-documents/:id/seed-from-quote", async (req, res) => {
+    try {
+      const { quoteId } = req.body;
+      if (!quoteId) {
+        return res.status(400).json({ error: "quoteId is required" });
+      }
+      const products = await storage.seedJobSetupProductsFromQuote(req.params.id, quoteId);
+      res.json({ products, count: products.length });
+    } catch (error) {
+      console.error("Error seeding products from quote:", error);
+      res.status(500).json({ error: "Failed to seed products from quote" });
+    }
+  });
+
+  // Validate if job can transition to a new status (based on setup document completion)
+  app.get("/api/jobs/:jobId/validate-status-change", async (req, res) => {
+    try {
+      const { newStatus } = req.query;
+      if (!newStatus || typeof newStatus !== "string") {
+        return res.status(400).json({ error: "newStatus query parameter is required" });
+      }
+
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      // Only supply+install jobs require setup document validation
+      if (job.jobType === "supply_only") {
+        return res.json({ valid: true, message: "Supply only job - no validation required" });
+      }
+
+      const document = await storage.getJobSetupDocumentByJob(req.params.jobId);
+      if (!document) {
+        // If transitioning to any status beyond 'pending', need document
+        const blockedStatuses = ["awaiting_deposit", "in_production", "ready_for_install", "scheduled", "installing", "completed"];
+        if (blockedStatuses.includes(newStatus)) {
+          return res.json({ 
+            valid: false, 
+            message: "Job setup document must be created before changing status",
+            requiredSections: []
+          });
+        }
+        return res.json({ valid: true, message: "Status change allowed" });
+      }
+
+      // Define required sections for each status transition
+      const statusRequirements: Record<string, { sections: number[]; message: string }> = {
+        "in_production": { 
+          sections: [1, 2], 
+          message: "Section 1 (Sales Info) and Section 2 (Products) must be completed before production" 
+        },
+        "ready_for_install": { 
+          sections: [1, 2, 3, 4], 
+          message: "Sections 1-4 must be completed before marking ready for install" 
+        },
+        "scheduled": { 
+          sections: [1, 2, 3, 4], 
+          message: "Sections 1-4 must be completed before scheduling" 
+        },
+        "installing": { 
+          sections: [1, 2, 3, 4], 
+          message: "Sections 1-4 must be completed before install can begin" 
+        },
+        "completed": { 
+          sections: [1, 2, 3, 4, 5], 
+          message: "All sections must be completed before marking job complete" 
+        },
+      };
+
+      const requirements = statusRequirements[newStatus];
+      if (!requirements) {
+        return res.json({ valid: true, message: "Status change allowed" });
+      }
+
+      // Check which sections are not complete
+      const incompleteSections: number[] = [];
+      if (requirements.sections.includes(1) && !document.section1Complete) incompleteSections.push(1);
+      if (requirements.sections.includes(2) && !document.section2Complete) incompleteSections.push(2);
+      if (requirements.sections.includes(3) && !document.section3Complete) incompleteSections.push(3);
+      if (requirements.sections.includes(4) && !document.section4Complete) incompleteSections.push(4);
+      if (requirements.sections.includes(5) && !document.section5Complete) incompleteSections.push(5);
+
+      if (incompleteSections.length > 0) {
+        return res.json({ 
+          valid: false, 
+          message: requirements.message,
+          requiredSections: requirements.sections,
+          incompleteSections
+        });
+      }
+
+      return res.json({ valid: true, message: "Status change allowed" });
+    } catch (error) {
+      console.error("Error validating status change:", error);
+      res.status(500).json({ error: "Failed to validate status change" });
     }
   });
 

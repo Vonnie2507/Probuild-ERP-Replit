@@ -9,6 +9,7 @@ import {
   travelSessions, quoteGroundConditions, quotePLSummary,
   departments, workflows, workflowVersions, policies, policyVersions,
   policyAcknowledgements, resources, knowledgeArticles,
+  jobSetupDocuments, jobSetupProducts,
   type User, type InsertUser,
   type Client, type InsertClient,
   type Lead, type InsertLead,
@@ -45,6 +46,13 @@ import {
   type PolicyAcknowledgement, type InsertPolicyAcknowledgement,
   type Resource, type InsertResource,
   type KnowledgeArticle, type InsertKnowledgeArticle,
+  type JobSetupDocument, type InsertJobSetupDocument,
+  type JobSetupProduct, type InsertJobSetupProduct,
+  type JobSetupSection1Sales,
+  type JobSetupSection2ProductsMeta,
+  type JobSetupSection3Production,
+  type JobSetupSection4Schedule,
+  type JobSetupSection5Install,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -374,6 +382,42 @@ export interface IStorage {
   createKnowledgeArticle(article: InsertKnowledgeArticle): Promise<KnowledgeArticle>;
   updateKnowledgeArticle(id: string, article: Partial<InsertKnowledgeArticle>): Promise<KnowledgeArticle | undefined>;
   deleteKnowledgeArticle(id: string): Promise<boolean>;
+
+  // ============================================
+  // JOB SETUP DOCUMENTS
+  // ============================================
+
+  // Job Setup Documents
+  getJobSetupDocument(id: string): Promise<JobSetupDocument | undefined>;
+  getJobSetupDocumentByJob(jobId: string): Promise<JobSetupDocument | undefined>;
+  getJobSetupDocuments(): Promise<JobSetupDocument[]>;
+  getJobSetupDocumentsByStatus(status: string): Promise<JobSetupDocument[]>;
+  createJobSetupDocument(document: InsertJobSetupDocument): Promise<JobSetupDocument>;
+  updateJobSetupDocument(id: string, document: Partial<InsertJobSetupDocument>): Promise<JobSetupDocument | undefined>;
+  deleteJobSetupDocument(id: string): Promise<boolean>;
+  
+  // Section-specific updates
+  updateJobSetupSection1(id: string, section: JobSetupSection1Sales): Promise<JobSetupDocument | undefined>;
+  updateJobSetupSection2Meta(id: string, section: JobSetupSection2ProductsMeta): Promise<JobSetupDocument | undefined>;
+  updateJobSetupSection3(id: string, section: JobSetupSection3Production): Promise<JobSetupDocument | undefined>;
+  updateJobSetupSection4(id: string, section: JobSetupSection4Schedule): Promise<JobSetupDocument | undefined>;
+  updateJobSetupSection5(id: string, section: JobSetupSection5Install): Promise<JobSetupDocument | undefined>;
+  
+  // Section completion
+  markSectionComplete(id: string, sectionNumber: 1 | 2 | 3 | 4 | 5, complete: boolean): Promise<JobSetupDocument | undefined>;
+  recalculateDocumentStatus(id: string): Promise<JobSetupDocument | undefined>;
+  
+  // Job Setup Products (BOM items)
+  getJobSetupProduct(id: string): Promise<JobSetupProduct | undefined>;
+  getJobSetupProductsByDocument(documentId: string): Promise<JobSetupProduct[]>;
+  createJobSetupProduct(product: InsertJobSetupProduct): Promise<JobSetupProduct>;
+  createJobSetupProducts(products: InsertJobSetupProduct[]): Promise<JobSetupProduct[]>;
+  updateJobSetupProduct(id: string, product: Partial<InsertJobSetupProduct>): Promise<JobSetupProduct | undefined>;
+  deleteJobSetupProduct(id: string): Promise<boolean>;
+  deleteJobSetupProductsByDocument(documentId: string): Promise<boolean>;
+  
+  // Seed products from quote
+  seedJobSetupProductsFromQuote(documentId: string, quoteId: string): Promise<JobSetupProduct[]>;
 }
 
 export interface DashboardStats {
@@ -2084,6 +2128,231 @@ export class DatabaseStorage implements IStorage {
   async deleteKnowledgeArticle(id: string): Promise<boolean> {
     const result = await db.delete(knowledgeArticles).where(eq(knowledgeArticles.id, id)).returning();
     return result.length > 0;
+  }
+
+  // ============================================
+  // JOB SETUP DOCUMENTS
+  // ============================================
+
+  async getJobSetupDocument(id: string): Promise<JobSetupDocument | undefined> {
+    const [document] = await db.select().from(jobSetupDocuments).where(eq(jobSetupDocuments.id, id));
+    return document;
+  }
+
+  async getJobSetupDocumentByJob(jobId: string): Promise<JobSetupDocument | undefined> {
+    const [document] = await db.select().from(jobSetupDocuments).where(eq(jobSetupDocuments.jobId, jobId));
+    return document;
+  }
+
+  async getJobSetupDocuments(): Promise<JobSetupDocument[]> {
+    return db.select().from(jobSetupDocuments).orderBy(desc(jobSetupDocuments.createdAt));
+  }
+
+  async getJobSetupDocumentsByStatus(status: string): Promise<JobSetupDocument[]> {
+    return db.select().from(jobSetupDocuments)
+      .where(eq(jobSetupDocuments.status, status as any))
+      .orderBy(desc(jobSetupDocuments.createdAt));
+  }
+
+  async createJobSetupDocument(document: InsertJobSetupDocument): Promise<JobSetupDocument> {
+    const [created] = await db.insert(jobSetupDocuments).values(document as any).returning();
+    return created;
+  }
+
+  async updateJobSetupDocument(id: string, document: Partial<InsertJobSetupDocument>): Promise<JobSetupDocument | undefined> {
+    const [updated] = await db.update(jobSetupDocuments)
+      .set({ ...document, updatedAt: new Date() } as any)
+      .where(eq(jobSetupDocuments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteJobSetupDocument(id: string): Promise<boolean> {
+    // First delete associated products
+    await db.delete(jobSetupProducts).where(eq(jobSetupProducts.jobSetupDocumentId, id));
+    // Then delete the document
+    const result = await db.delete(jobSetupDocuments).where(eq(jobSetupDocuments.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Section-specific updates
+  async updateJobSetupSection1(id: string, section: JobSetupSection1Sales): Promise<JobSetupDocument | undefined> {
+    const [updated] = await db.update(jobSetupDocuments)
+      .set({ section1Sales: section, updatedAt: new Date() })
+      .where(eq(jobSetupDocuments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async updateJobSetupSection2Meta(id: string, section: JobSetupSection2ProductsMeta): Promise<JobSetupDocument | undefined> {
+    const [updated] = await db.update(jobSetupDocuments)
+      .set({ section2ProductsMeta: section, updatedAt: new Date() })
+      .where(eq(jobSetupDocuments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async updateJobSetupSection3(id: string, section: JobSetupSection3Production): Promise<JobSetupDocument | undefined> {
+    const [updated] = await db.update(jobSetupDocuments)
+      .set({ section3Production: section, updatedAt: new Date() })
+      .where(eq(jobSetupDocuments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async updateJobSetupSection4(id: string, section: JobSetupSection4Schedule): Promise<JobSetupDocument | undefined> {
+    const [updated] = await db.update(jobSetupDocuments)
+      .set({ section4Schedule: section, updatedAt: new Date() })
+      .where(eq(jobSetupDocuments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async updateJobSetupSection5(id: string, section: JobSetupSection5Install): Promise<JobSetupDocument | undefined> {
+    const [updated] = await db.update(jobSetupDocuments)
+      .set({ section5Install: section, updatedAt: new Date() })
+      .where(eq(jobSetupDocuments.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Section completion
+  async markSectionComplete(id: string, sectionNumber: 1 | 2 | 3 | 4 | 5, complete: boolean): Promise<JobSetupDocument | undefined> {
+    const sectionField = `section${sectionNumber}Complete` as keyof typeof jobSetupDocuments.$inferInsert;
+    const [updated] = await db.update(jobSetupDocuments)
+      .set({ [sectionField]: complete, updatedAt: new Date() } as any)
+      .where(eq(jobSetupDocuments.id, id))
+      .returning();
+    
+    // Recalculate document status after marking section
+    if (updated) {
+      return this.recalculateDocumentStatus(id);
+    }
+    return updated;
+  }
+
+  async recalculateDocumentStatus(id: string): Promise<JobSetupDocument | undefined> {
+    const document = await this.getJobSetupDocument(id);
+    if (!document) return undefined;
+
+    let newStatus: string = document.status;
+
+    // Determine new status based on section completion
+    if (document.section5Complete) {
+      newStatus = "completed";
+    } else if (document.section4Complete) {
+      newStatus = "ready_for_install";
+    } else if (document.section3Complete) {
+      newStatus = "ready_for_scheduling";
+    } else if (document.section1Complete && document.section2Complete) {
+      newStatus = "ready_for_production";
+    } else if (document.section1Complete || document.section2Complete) {
+      newStatus = "in_progress";
+    } else {
+      newStatus = "draft";
+    }
+
+    if (newStatus !== document.status) {
+      const [updated] = await db.update(jobSetupDocuments)
+        .set({ status: newStatus as any, updatedAt: new Date() })
+        .where(eq(jobSetupDocuments.id, id))
+        .returning();
+      return updated;
+    }
+
+    return document;
+  }
+
+  // Job Setup Products
+  async getJobSetupProduct(id: string): Promise<JobSetupProduct | undefined> {
+    const [product] = await db.select().from(jobSetupProducts).where(eq(jobSetupProducts.id, id));
+    return product;
+  }
+
+  async getJobSetupProductsByDocument(documentId: string): Promise<JobSetupProduct[]> {
+    return db.select().from(jobSetupProducts)
+      .where(eq(jobSetupProducts.jobSetupDocumentId, documentId))
+      .orderBy(jobSetupProducts.category, jobSetupProducts.productName);
+  }
+
+  async createJobSetupProduct(product: InsertJobSetupProduct): Promise<JobSetupProduct> {
+    const [created] = await db.insert(jobSetupProducts).values(product).returning();
+    return created;
+  }
+
+  async createJobSetupProducts(productsToCreate: InsertJobSetupProduct[]): Promise<JobSetupProduct[]> {
+    if (productsToCreate.length === 0) return [];
+    return db.insert(jobSetupProducts).values(productsToCreate).returning();
+  }
+
+  async updateJobSetupProduct(id: string, product: Partial<InsertJobSetupProduct>): Promise<JobSetupProduct | undefined> {
+    const [updated] = await db.update(jobSetupProducts)
+      .set({ ...product, updatedAt: new Date() })
+      .where(eq(jobSetupProducts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteJobSetupProduct(id: string): Promise<boolean> {
+    const result = await db.delete(jobSetupProducts).where(eq(jobSetupProducts.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async deleteJobSetupProductsByDocument(documentId: string): Promise<boolean> {
+    const result = await db.delete(jobSetupProducts)
+      .where(eq(jobSetupProducts.jobSetupDocumentId, documentId))
+      .returning();
+    return result.length > 0;
+  }
+
+  // Seed products from quote
+  async seedJobSetupProductsFromQuote(documentId: string, quoteId: string): Promise<JobSetupProduct[]> {
+    const quote = await this.getQuote(quoteId);
+    if (!quote || !quote.lineItems) return [];
+
+    // Get all products to validate productId references
+    const allProducts = await this.getProducts();
+    const productIdSet = new Set(allProducts.map(p => p.id));
+
+    // Map quote line items to job setup products
+    const productsToCreate: InsertJobSetupProduct[] = quote.lineItems.map((item: any) => {
+      // Determine category based on product name or other indicators
+      let category: string = "other";
+      const nameLower = item.productName?.toLowerCase() || "";
+      if (nameLower.includes("post")) category = "post";
+      else if (nameLower.includes("rail")) category = "rail";
+      else if (nameLower.includes("panel") || nameLower.includes("picket")) category = "panel";
+      else if (nameLower.includes("cap")) category = "cap";
+      else if (nameLower.includes("gate")) category = "gate";
+      else if (nameLower.includes("hardware") || nameLower.includes("screw") || nameLower.includes("bracket")) category = "hardware";
+      else if (nameLower.includes("cement") || nameLower.includes("concrete")) category = "cement";
+
+      // Only use productId if it's a valid UUID that exists in the products table
+      // Quote line items might have SKUs instead of UUIDs, so we need to validate
+      const validProductId = item.productId && productIdSet.has(item.productId) ? item.productId : null;
+
+      return {
+        jobSetupDocumentId: documentId,
+        productId: validProductId,
+        productName: item.productName || "Unknown Product",
+        sku: !validProductId && item.productId ? item.productId : null,
+        category: category as any,
+        quantity: item.quantity || 0,
+        unitInfo: null,
+        notes: item.notes || null,
+        sourceQuoteLineId: null,
+        addedBy: null,
+      };
+    });
+
+    // Update section 2 metadata
+    await this.updateJobSetupSection2Meta(documentId, {
+      autoPopulatedFromQuote: true,
+      quoteId: quoteId,
+      lastUpdatedAt: new Date().toISOString(),
+    });
+
+    return this.createJobSetupProducts(productsToCreate);
   }
 }
 
