@@ -8,6 +8,7 @@ import { JobCard } from "@/components/jobs/JobCard";
 import { JobTimeline } from "@/components/jobs/JobTimeline";
 import { JobSetupDocument } from "@/components/jobs/JobSetupDocument";
 import { JobKanbanBoard } from "@/components/jobs/JobKanbanBoard";
+import { ViewToggle } from "@/components/jobs/ViewToggle";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -52,8 +53,6 @@ import {
   Pencil,
   Trash2,
   Download,
-  List,
-  LayoutGrid,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -337,26 +336,7 @@ export default function Jobs() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex border rounded-md">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={viewMode === "list" ? "bg-muted" : ""}
-                onClick={() => setViewMode("list")}
-                data-testid="button-view-list"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={viewMode === "kanban" ? "bg-muted" : ""}
-                onClick={() => setViewMode("kanban")}
-                data-testid="button-view-kanban"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-            </div>
+            <ViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
             <Button 
               variant="outline" 
               size="sm"
@@ -392,26 +372,7 @@ export default function Jobs() {
         <div className="p-4 border-b space-y-4">
           <div className="flex items-center justify-between gap-2">
             <h1 className="text-xl font-semibold" data-testid="text-jobs-title">Jobs</h1>
-            <div className="flex border rounded-md">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={viewMode === "list" ? "bg-muted" : ""}
-                onClick={() => setViewMode("list")}
-                data-testid="button-view-list"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={viewMode === "kanban" ? "bg-muted" : ""}
-                onClick={() => setViewMode("kanban")}
-                data-testid="button-view-kanban"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-            </div>
+            <ViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
