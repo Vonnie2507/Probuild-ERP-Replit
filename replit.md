@@ -22,6 +22,14 @@ The system employs a modern web architecture with a clear separation of concerns
 
 **Feature Specifications:**
 -   **Core Modules:** Includes modules for Lead Management, Quote Builder, Job Workflow, Production Queue, Scheduling, Inventory, Payments, and CRM Messaging (SMS).
+-   **Staff Login & Personal Dashboard:** Session-based authentication system with personalized dashboard for each staff member. Features:
+    -   Login page with email/password authentication
+    -   AuthContext and useAuth hook for frontend state management
+    -   Personal Dashboard (/) with 5 widgets: My To-Do List, My Notifications, Role-Based KPIs, Weather (Perth, WA), and My Leave Balances
+    -   Business Dashboard (/business-dashboard) for company-wide metrics
+    -   Dynamic sidebar with user info display and logout functionality
+    -   Role-based KPI metrics calculated from real database data (leads, quotes, jobs, production tasks)
+    -   Leave balance tracking via staff_leave_balances table
 -   **Lead Card Detail Dialog:** Tabbed interface showing Details, Quotes, Activity (notes, tasks, activity log), and Live Document tabs. Supports adding notes, creating tasks, logging calls, and viewing/creating live documents for supply_install leads.
 -   **Call Log & Transcription System:** Full call logging with direction (inbound/outbound/missed), duration tracking, notes, and collapsible detail panels. Supports creating tasks linked to specific calls. Prepared for future AI transcription integration.
 -   **Specialized Applications:** Features a dedicated Installer Mobile App and a Trade Client Portal for self-service.
