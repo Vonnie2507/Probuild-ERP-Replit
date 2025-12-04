@@ -30,6 +30,9 @@ The system employs a modern web architecture with a clear separation of concerns
     -   Dynamic sidebar with user info display and logout functionality
     -   Role-based KPI metrics calculated from real database data (leads, quotes, jobs, production tasks)
     -   Leave balance tracking via staff_leave_balances table
+    -   **Role-specific Quick Actions:** Dynamic quick action buttons tailored to each user role (admin gets New Lead, Schedule, Business Dashboard; sales gets leads and quotes; scheduler gets scheduling tools; etc.)
+    -   **Task Navigation:** Click any task in the dashboard to open the corresponding lead detail dialog directly at the Activity tab with the specific task highlighted
+    -   **Completed Tasks View:** Toggle button to show/hide completed tasks on the dashboard, with count displayed in the widget header
 -   **Lead Card Detail Dialog:** Tabbed interface showing Details, Quotes, Activity (notes, tasks, activity log), and Live Document tabs. Supports adding notes, creating tasks, logging calls, and viewing/creating live documents for supply_install leads.
 -   **Call Log & Transcription System:** Full call logging with direction (inbound/outbound/missed), duration tracking, notes, and collapsible detail panels. Supports creating tasks linked to specific calls. Prepared for future AI transcription integration.
 -   **Specialized Applications:** Features a dedicated Installer Mobile App and a Trade Client Portal for self-service.
