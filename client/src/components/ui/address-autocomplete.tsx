@@ -181,7 +181,17 @@ function SoilDataDisplay({ lat, lng }: { lat: number; lng: number }) {
   }
 
   if (error || !soilData) {
-    return null;
+    return (
+      <div className="mt-2 rounded-md border bg-muted/30 p-2" data-testid="soil-data-display">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <span data-testid="soil-type">Soil data unavailable for this location</span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1" data-testid="installation-notes">
+          Site assessment recommended - contact office for soil evaluation
+        </p>
+      </div>
+    );
   }
 
   // Determine the icon and color based on installation difficulty
@@ -243,6 +253,7 @@ export function AddressAutocomplete({
   const [isApiAvailable, setIsApiAvailable] = useState(false);
   const [confirmedAddress, setConfirmedAddress] = useState(value);
   const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesService = useRef<google.maps.places.PlacesService | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
@@ -326,6 +337,7 @@ export function AddressAutocomplete({
     const newValue = e.target.value;
     setInputValue(newValue);
     onChange(newValue);
+    setHighlightedIndex(-1);
 
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
@@ -338,6 +350,35 @@ export function AddressAutocomplete({
     } else {
       setPredictions([]);
       setShowDropdown(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showDropdown || predictions.length === 0) return;
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setHighlightedIndex((prev) =>
+          prev < predictions.length - 1 ? prev + 1 : 0
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setHighlightedIndex((prev) =>
+          prev > 0 ? prev - 1 : predictions.length - 1
+        );
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (highlightedIndex >= 0 && highlightedIndex < predictions.length) {
+          handleSelectPrediction(predictions[highlightedIndex]);
+        }
+        break;
+      case "Escape":
+        setShowDropdown(false);
+        setHighlightedIndex(-1);
+        break;
     }
   };
 
@@ -378,6 +419,7 @@ export function AddressAutocomplete({
         }
         setShowDropdown(false);
         setPredictions([]);
+        setHighlightedIndex(-1);
       }
     );
   };
@@ -388,6 +430,7 @@ export function AddressAutocomplete({
         <Input
           value={inputValue}
           onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
           onFocus={() => {
             if (predictions.length > 0) {
               setShowDropdown(true);
@@ -407,11 +450,13 @@ export function AddressAutocomplete({
       {showDropdown && predictions.length > 0 && (
         <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg">
           <ul className="max-h-60 overflow-auto py-1">
-            {predictions.map((prediction) => (
+            {predictions.map((prediction, index) => (
               <li
                 key={prediction.place_id}
                 onClick={() => handleSelectPrediction(prediction)}
-                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-accent"
+                className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-accent ${
+                  highlightedIndex === index ? "bg-accent" : ""
+                }`}
                 data-testid={`address-suggestion-${prediction.place_id}`}
               >
                 <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />

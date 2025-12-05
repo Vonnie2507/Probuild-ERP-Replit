@@ -291,12 +291,29 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid lat/lng values" });
       }
       
-      // Call ASRIS (CSIRO) Soil API
+      // Call ASRIS (CSIRO) Soil API with retry
       const asrisUrl = `https://asris.csiro.au/ASRISApi/api/APSIM/getApsoil?longitude=${longitude}&latitude=${latitude}`;
       
-      const response = await fetch(asrisUrl);
-      if (!response.ok) {
-        throw new Error("Failed to fetch soil data from ASRIS");
+      let response: Response | null = null;
+      let lastError: Error | null = null;
+      
+      // Retry up to 3 times with backoff
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          response = await fetch(asrisUrl, { 
+            signal: AbortSignal.timeout(10000) // 10 second timeout
+          });
+          if (response.ok) break;
+          lastError = new Error(`ASRIS returned ${response.status}`);
+        } catch (err) {
+          lastError = err as Error;
+        }
+        // Wait before retry (100ms, 300ms)
+        if (attempt < 2) await new Promise(r => setTimeout(r, 100 * (attempt + 1)));
+      }
+      
+      if (!response?.ok) {
+        throw lastError || new Error("Failed to fetch soil data from ASRIS");
       }
       
       const xmlText = await response.text();
