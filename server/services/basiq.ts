@@ -91,10 +91,11 @@ export class BasiqService {
     ) || null;
   }
 
-  async createUser(email: string, mobile?: string, businessName?: string): Promise<any> {
+  async createUser(email: string, mobile?: string, businessName?: string, abn?: string): Promise<any> {
     const body: any = { 
       email,
-      businessName: businessName || "Probuild PVC"
+      businessName: businessName || "Probuild PVC",
+      abn: abn || process.env.PROBUILD_ABN || "11111111111" // Placeholder ABN for testing
     };
     if (mobile) {
       body.mobile = mobile;
