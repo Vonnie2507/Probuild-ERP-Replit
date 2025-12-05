@@ -91,12 +91,30 @@ export class BasiqService {
     ) || null;
   }
 
-  async createUser(email: string, mobile?: string, businessName?: string, abn?: string): Promise<any> {
+  async createUser(params: {
+    email: string;
+    mobile: string;
+    firstName: string;
+    lastName: string;
+    businessName: string;
+    abn: string;
+  }): Promise<any> {
     const body: any = { 
-      email,
-      firstName: "Probuild",
-      lastName: "PVC",
-      mobile: mobile || "+61400000000"
+      email: params.email,
+      mobile: params.mobile,
+      firstName: params.firstName,
+      lastName: params.lastName,
+      businessName: params.businessName,
+      businessIdNo: params.abn,
+      businessIdNoType: "ABN",
+      businessAddress: {
+        addressLine1: "Perth",
+        suburb: "Perth",
+        state: "WA",
+        postcode: "6000",
+        countryCode: "AUS"
+      },
+      verificationStatus: true
     };
 
     return this.makeRequest("/users", {

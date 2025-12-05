@@ -95,6 +95,11 @@ const connectionFormSchema = z.object({
   institutionId: z.string().min(1, "Please select a bank"),
   loginId: z.string().min(1, "Login ID is required"),
   password: z.string().min(1, "Password is required"),
+  email: z.string().email("Valid email required"),
+  mobile: z.string().min(10, "Mobile number required (e.g., +61400000000)"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  businessName: z.string().min(1, "Business name is required"),
   abn: z.string().min(11, "ABN must be 11 digits"),
 });
 
@@ -304,7 +309,12 @@ export default function Financial() {
       institutionId: "",
       loginId: "",
       password: "",
-      abn: "",
+      email: "",
+      mobile: "+61",
+      firstName: "",
+      lastName: "",
+      businessName: "Probuild PVC",
+      abn: "29688327479",
     },
   });
 
@@ -831,6 +841,101 @@ export default function Financial() {
                     <FormDescription>
                       Your credentials are securely transmitted via Open Banking
                     </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="First name"
+                          {...field}
+                          data-testid="input-first-name"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Last name"
+                          {...field}
+                          data-testid="input-last-name"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email Address</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="your@email.com"
+                        {...field}
+                        data-testid="input-email"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="mobile"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mobile Number</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="+61400000000"
+                        {...field}
+                        data-testid="input-mobile"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      International format (e.g., +61400000000)
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="businessName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Business Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Your business name"
+                        {...field}
+                        data-testid="input-business-name"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
