@@ -687,6 +687,11 @@ export async function registerRoutes(
         stage: leadData.stage || "new",
         jobFulfillmentType: leadData.jobFulfillmentType,
         clientId,
+        // Soil/site data from frontend
+        soilWarning: leadData.soilWarning || null,
+        soilInstallNotes: leadData.soilInstallNotes || null,
+        siteLatitude: leadData.siteLatitude || null,
+        siteLongitude: leadData.siteLongitude || null,
       };
       
       const validatedData = insertLeadSchema.parse(cleanLeadPayload);

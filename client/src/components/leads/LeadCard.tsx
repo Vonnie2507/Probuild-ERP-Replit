@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Phone, Mail, MapPin, Clock, MoreHorizontal, Pencil, Trash2, ClipboardList, Send, FileText } from "lucide-react";
+import { Phone, Mail, MapPin, Clock, MoreHorizontal, Pencil, Trash2, ClipboardList, Send, FileText, AlertTriangle, Mountain, Pickaxe, Shovel } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +21,56 @@ interface QuoteInfo {
   total: number;
   sent: number;
   approved: number;
+}
+
+// Soil warning badge with appropriate styling based on warning type
+function SoilWarningBadge({ warning }: { warning: string }) {
+  const warningUpper = warning.toUpperCase();
+  
+  // Determine color and icon based on warning type
+  if (warningUpper.includes("LIMESTONE") || warningUpper.includes("ROCK")) {
+    return (
+      <Badge variant="destructive" className="h-5 px-1.5 text-[10px] gap-1">
+        <Pickaxe className="h-3 w-3" />
+        {warningUpper.includes("LIMESTONE") ? "LIMESTONE" : "ROCK"}
+      </Badge>
+    );
+  }
+  
+  if (warningUpper.includes("CLAY")) {
+    return (
+      <Badge className="h-5 px-1.5 text-[10px] gap-1 bg-amber-600 hover:bg-amber-700 text-white">
+        <Mountain className="h-3 w-3" />
+        CLAY
+      </Badge>
+    );
+  }
+  
+  if (warningUpper.includes("GRAVEL")) {
+    return (
+      <Badge className="h-5 px-1.5 text-[10px] gap-1 bg-orange-500 hover:bg-orange-600 text-white">
+        <AlertTriangle className="h-3 w-3" />
+        GRAVEL
+      </Badge>
+    );
+  }
+  
+  if (warningUpper.includes("SAND")) {
+    return (
+      <Badge className="h-5 px-1.5 text-[10px] gap-1 bg-green-600 hover:bg-green-700 text-white">
+        <Shovel className="h-3 w-3" />
+        EASY
+      </Badge>
+    );
+  }
+  
+  // Default for other warnings
+  return (
+    <Badge variant="secondary" className="h-5 px-1.5 text-[10px] gap-1">
+      <Mountain className="h-3 w-3" />
+      {warning.length > 10 ? warning.substring(0, 10) + "..." : warning}
+    </Badge>
+  );
 }
 
 interface Lead {
@@ -41,6 +91,8 @@ interface Lead {
   };
   createdAt: string;
   quoteInfo?: QuoteInfo;
+  soilWarning?: string | null; // LIMESTONE, CLAY, ROCK, SAND, etc.
+  soilInstallNotes?: string | null;
 }
 
 interface LeadCardProps {
@@ -149,6 +201,18 @@ export function LeadCard({
             <MapPin className="h-3 w-3" />
             <span className="truncate">{lead.address}</span>
           </div>
+          {lead.soilWarning && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 mt-1" data-testid={`soil-warning-${lead.id}`}>
+                  <SoilWarningBadge warning={lead.soilWarning} />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p className="text-xs">{lead.soilInstallNotes || lead.soilWarning}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
         <div className="flex items-center justify-between pt-3 border-t">

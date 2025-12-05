@@ -70,6 +70,8 @@ interface KanbanLead {
     name: string;
     initials: string;
   };
+  soilWarning?: string | null;
+  soilInstallNotes?: string | null;
   createdAt: string;
   quoteInfo?: QuoteInfo;
 }
@@ -106,6 +108,8 @@ export default function Leads() {
     description: "",
     jobFulfillmentType: "supply_install" as "supply_only" | "supply_install",
   });
+  const [siteCoordinates, setSiteCoordinates] = useState<{ lat: number; lng: number } | null>(null);
+  const [soilData, setSoilData] = useState<{ warning: string | null; notes: string | null }>({ warning: null, notes: null });
   const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -217,6 +221,36 @@ export default function Leads() {
       setShowSuggestions(false);
     }
   }, [formData.clientName, formData.phone, formData.address, selectedClientId]);
+
+  // Fetch soil data when coordinates change
+  useEffect(() => {
+    if (siteCoordinates) {
+      const fetchSoilData = async () => {
+        try {
+          const response = await fetch(`/api/soil-data?lat=${siteCoordinates.lat}&lng=${siteCoordinates.lng}`);
+          if (response.ok) {
+            const data = await response.json();
+            // Determine short warning label based on installation notes
+            let warning: string | null = null;
+            if (data.installationNotes) {
+              const notes = data.installationNotes.toUpperCase();
+              if (notes.includes("LIMESTONE")) warning = "LIMESTONE";
+              else if (notes.includes("ROCK") || notes.includes("CALCRETE")) warning = "ROCK";
+              else if (notes.includes("CLAY") || notes.includes("HARDER")) warning = "CLAY";
+              else if (notes.includes("GRAVEL") || notes.includes("MIXED")) warning = "GRAVEL";
+              else if (notes.includes("SAND") || notes.includes("EASY")) warning = "SAND";
+            }
+            setSoilData({ warning, notes: data.installationNotes });
+          }
+        } catch (error) {
+          console.error("Error fetching soil data:", error);
+        }
+      };
+      fetchSoilData();
+    } else {
+      setSoilData({ warning: null, notes: null });
+    }
+  }, [siteCoordinates]);
 
   const handleSelectClient = (client: Client) => {
     setFormData({
@@ -394,6 +428,8 @@ export default function Leads() {
     setSelectedClientId(null);
     setClientSuggestions([]);
     setShowSuggestions(false);
+    setSiteCoordinates(null);
+    setSoilData({ warning: null, notes: null });
   };
 
   const getClientName = (clientId: string | null): string => {
@@ -451,6 +487,8 @@ export default function Leads() {
     assignedTo: getAssignedUser(lead.assignedTo),
     createdAt: formatTimeAgo(lead.createdAt),
     quoteInfo: getQuoteInfo(lead.id),
+    soilWarning: (lead as any).soilWarning || null,
+    soilInstallNotes: (lead as any).soilInstallNotes || null,
   }));
 
   const handleLeadClick = (lead: KanbanLead) => {
@@ -526,6 +564,11 @@ export default function Leads() {
       clientName: formData.clientName.trim(),
       clientPhone: formData.phone.trim(),
       clientEmail: formData.email.trim(),
+      // Include soil/site data
+      soilWarning: soilData.warning,
+      soilInstallNotes: soilData.notes,
+      siteLatitude: siteCoordinates?.lat?.toString() || null,
+      siteLongitude: siteCoordinates?.lng?.toString() || null,
     } as any);
   };
 
@@ -657,9 +700,10 @@ export default function Leads() {
                     setFormData({ ...formData, address: value });
                     if (selectedClientId) setSelectedClientId(null);
                   }}
+                  onCoordinatesChange={(coords) => setSiteCoordinates(coords)}
                   placeholder="Enter site address"
                   showStreetView={true}
-                  data-testid="input-address"
+                  data-testid="input-site-address"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">

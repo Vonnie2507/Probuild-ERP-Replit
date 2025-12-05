@@ -279,6 +279,11 @@ export const leads = pgTable("leads", {
   assignedTo: varchar("assigned_to").references(() => users.id),
   followUpDate: timestamp("follow_up_date"),
   notes: text("notes"),
+  // Soil/site assessment data
+  soilWarning: text("soil_warning"), // Short label: LIMESTONE, CLAY, ROCK, etc.
+  soilInstallNotes: text("soil_install_notes"), // Full installation notes
+  siteLatitude: decimal("site_latitude", { precision: 10, scale: 7 }),
+  siteLongitude: decimal("site_longitude", { precision: 10, scale: 7 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
