@@ -54,6 +54,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
 import type { BankAccount, BankConnection, BankTransaction } from "@shared/schema";
 
 interface FinancialOverview {
@@ -319,6 +320,8 @@ export default function Financial() {
   const [searchQuery, setSearchQuery] = useState("");
   const [directionFilter, setDirectionFilter] = useState<string>("all");
   const [showConnectDialog, setShowConnectDialog] = useState(false);
+  const [businessName, setBusinessName] = useState("");
+  const [businessIdNo, setBusinessIdNo] = useState("");
   const [, setLocation] = useLocation();
   const isAdmin = user?.role === "admin";
 
@@ -410,10 +413,15 @@ export default function Financial() {
   // CDR Consent Flow - Create consent and redirect to Basiq Connect
   const connectBankMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/financial/connect-bank", {});
+      return apiRequest("POST", "/api/financial/connect-bank", {
+        businessName: businessName || "Probuild PVC",
+        businessIdNo: businessIdNo || "29688327479"
+      });
     },
     onSuccess: (data: any) => {
       setShowConnectDialog(false);
+      setBusinessName("");
+      setBusinessIdNo("");
       
       if (data.connectUrl) {
         toast({ 
@@ -737,7 +745,7 @@ export default function Financial() {
               Connect Bank Account
             </DialogTitle>
             <DialogDescription>
-              Securely connect your Westpac Business account using Open Banking
+              Securely connect your business bank account using Open Banking
             </DialogDescription>
           </DialogHeader>
 
@@ -751,11 +759,27 @@ export default function Financial() {
               </AlertDescription>
             </Alert>
 
-            <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-              <p className="text-sm font-medium">Business Details</p>
-              <div className="text-sm text-muted-foreground space-y-1">
-                <p><strong>Business Name:</strong> Probuild PVC</p>
-                <p><strong>ABN:</strong> 29 688 327 479</p>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="businessName" className="text-sm font-medium">Business Name</Label>
+                <Input 
+                  id="businessName"
+                  placeholder="e.g., Probuild PVC" 
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  data-testid="input-business-name"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="businessIdNo" className="text-sm font-medium">ABN (Australian Business Number)</Label>
+                <Input 
+                  id="businessIdNo"
+                  placeholder="e.g., 29 688 327 479" 
+                  value={businessIdNo}
+                  onChange={(e) => setBusinessIdNo(e.target.value)}
+                  data-testid="input-business-id"
+                />
               </div>
             </div>
 
@@ -774,14 +798,19 @@ export default function Financial() {
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button 
               variant="outline" 
-              onClick={() => setShowConnectDialog(false)}
+              onClick={() => {
+                setShowConnectDialog(false);
+                setBusinessName("");
+                setBusinessIdNo("");
+              }}
               className="w-full sm:w-auto"
+              data-testid="button-cancel-connection"
             >
               Cancel
             </Button>
             <Button 
               onClick={() => connectBankMutation.mutate()}
-              disabled={connectBankMutation.isPending}
+              disabled={connectBankMutation.isPending || !businessName || !businessIdNo}
               className="w-full sm:w-auto"
               data-testid="button-start-connection"
             >

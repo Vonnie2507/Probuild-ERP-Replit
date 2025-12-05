@@ -5193,11 +5193,12 @@ export async function registerRoutes(
   // Create CDR consent and get Connect URL - initiates the Open Banking flow
   app.post("/api/financial/connect-bank", requireRoles("admin"), async (req, res) => {
     try {
+      const { businessName = "Probuild PVC", businessIdNo = "29688327479" } = req.body;
       const { BasiqService } = await import("./services/basiq");
       const basiq = new BasiqService();
       
       // Create CDR consent - this returns the consent ID and redirect URL
-      const { consentId, connectUrl } = await basiq.createCDRConsent();
+      const { consentId, connectUrl } = await basiq.createCDRConsent(businessName, businessIdNo);
       
       // Store the pending connection with consent ID
       const connection = await storage.createBankConnection({
@@ -5211,8 +5212,8 @@ export async function registerRoutes(
         refreshJobId: null,
         metadata: { 
           createdAt: new Date().toISOString(),
-          businessName: "Probuild PVC",
-          businessIdNo: "29688327479"
+          businessName,
+          businessIdNo
         }
       });
 

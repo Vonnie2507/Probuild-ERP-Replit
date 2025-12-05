@@ -88,7 +88,7 @@ export class BasiqService {
    * This is the ONLY way to connect to banks like Westpac Business
    * NO login credentials should ever be collected or sent
    */
-  async createCDRConsent(): Promise<{ consentId: string; connectUrl: string }> {
+  async createCDRConsent(businessName?: string, businessIdNo?: string): Promise<{ consentId: string; connectUrl: string }> {
     const redirectUri = process.env.BASIQ_REDIRECT_URI || 
       `${process.env.REPLIT_DOMAINS?.split(",")[0] ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}` : "http://localhost:5000"}/api/financial/callback`;
 
@@ -101,8 +101,8 @@ export class BasiqService {
         "ACCOUNT_DETAIL",
         "TRANSACTION_DETAIL"
       ],
-      businessName: BUSINESS_DETAILS.businessName,
-      businessIdNo: BUSINESS_DETAILS.businessIdNo,
+      businessName: businessName || BUSINESS_DETAILS.businessName,
+      businessIdNo: businessIdNo || BUSINESS_DETAILS.businessIdNo,
       organisationType: BUSINESS_DETAILS.organisationType,
       sharingDuration: 365
     };
