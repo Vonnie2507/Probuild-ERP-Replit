@@ -81,41 +81,58 @@ function StreetViewPreview({ address }: { address: string }) {
     return null;
   }
 
-  const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${encodeURIComponent(address)}&key=${apiKey}`;
+  const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=400x120&location=${encodeURIComponent(address)}&key=${apiKey}`;
+  const googleMapsUrl = `https://www.google.com/maps?q=${encodeURIComponent(address)}&layer=c`;
 
   return (
     <div className="mt-2 rounded-md overflow-hidden border bg-muted/30">
       {isLoading && !hasError && (
-        <div className="h-[150px] flex items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="h-[100px] flex items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       )}
       {hasError ? (
-        <div className="h-[150px] flex flex-col items-center justify-center text-muted-foreground">
-          <ImageOff className="h-8 w-8 mb-2" />
-          <span className="text-sm">Street View not available</span>
+        <div className="h-[100px] flex flex-col items-center justify-center text-muted-foreground">
+          <ImageOff className="h-6 w-6 mb-1" />
+          <span className="text-xs">Street View not available</span>
         </div>
       ) : (
-        <img
-          src={streetViewUrl}
-          alt="Street View of address"
-          className={`w-full h-[150px] object-cover ${isLoading ? 'hidden' : 'block'}`}
-          onLoad={(e) => {
-            setIsLoading(false);
-            const img = e.target as HTMLImageElement;
-            if (img.naturalWidth === 600 && img.naturalHeight === 300) {
+        <a 
+          href={googleMapsUrl} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="block cursor-pointer"
+          title="Click to open in Google Maps"
+        >
+          <img
+            src={streetViewUrl}
+            alt="Street View of address"
+            className={`w-full h-[100px] object-cover hover:opacity-90 transition-opacity ${isLoading ? 'hidden' : 'block'}`}
+            onLoad={(e) => {
+              setIsLoading(false);
+              const img = e.target as HTMLImageElement;
+              if (img.naturalWidth === 600 && img.naturalHeight === 300) {
+                setHasError(true);
+              }
+            }}
+            onError={() => {
+              setIsLoading(false);
               setHasError(true);
-            }
-          }}
-          onError={() => {
-            setIsLoading(false);
-            setHasError(true);
-          }}
-          data-testid="streetview-image"
-        />
+            }}
+            data-testid="streetview-image"
+          />
+        </a>
       )}
-      <div className="px-2 py-1 text-[10px] text-muted-foreground text-right border-t">
-        Google Street View
+      <div className="px-2 py-1 text-[10px] text-muted-foreground text-right border-t flex items-center justify-between">
+        <a 
+          href={googleMapsUrl} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          Open in Maps
+        </a>
+        <span>Google Street View</span>
       </div>
     </div>
   );
