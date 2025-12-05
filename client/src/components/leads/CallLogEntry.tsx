@@ -174,21 +174,19 @@ export function CallLogEntry({ activity, users, leadId, onCreateTask }: CallLogE
             </div>
 
             <div className="flex items-center gap-1">
-              {hasDetails && (
-                <CollapsibleTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    data-testid={`button-expand-call-${activity.id}`}
-                  >
-                    {isExpanded ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
-                    )}
-                  </Button>
-                </CollapsibleTrigger>
-              )}
+              <CollapsibleTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  data-testid={`button-expand-call-${activity.id}`}
+                >
+                  {isExpanded ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </CollapsibleTrigger>
               
               <AlertDialog>
                 <AlertDialogTrigger asChild>
