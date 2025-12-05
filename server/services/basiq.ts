@@ -95,8 +95,9 @@ export class BasiqService {
     const body: any = { 
       email,
       businessName: businessName || "Probuild PVC",
-      // Basiq requires BusinessIdNo (not abn) for the ABN field
-      BusinessIdNo: abn || process.env.PROBUILD_ABN || "11111111111"
+      // Basiq requires both BusinessIdNo and BusinessIdNoType for business users
+      BusinessIdNo: abn || process.env.PROBUILD_ABN || "11111111111",
+      BusinessIdNoType: "ABN" // Australian Business Number
     };
     if (mobile) {
       body.mobile = mobile;
