@@ -67,16 +67,15 @@ export class BasiqService {
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
-    const token = await this.getAccessToken();
-    
-    console.log("Making request with token length:", token?.length);
-    console.log("Token first 50 chars:", token?.substring(0, 50));
-    console.log("Full Authorization header:", `Bearer ${token?.substring(0, 20)}...`);
+    // For Basiq API v3+ CDR flow, use Bearer with the API key directly
+    console.log("Making request with Bearer API key");
+    console.log("API key length:", this.apiKey?.length);
+    console.log("API key first 20 chars:", this.apiKey?.substring(0, 20));
     
     const response = await fetch(`${BASIQ_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
-        "Authorization": `Bearer ${token}`,
+        "Authorization": `Bearer ${this.apiKey}`,
         "Accept": "application/json",
         "Content-Type": "application/json",
         "basiq-version": "3.0",
