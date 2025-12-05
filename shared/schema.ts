@@ -1950,3 +1950,114 @@ export type RoleDashboardLayout = typeof roleDashboardLayouts.$inferSelect;
 
 export type InsertDashboardWidgetInstance = z.infer<typeof insertDashboardWidgetInstanceSchema>;
 export type DashboardWidgetInstance = typeof dashboardWidgetInstances.$inferSelect;
+
+// ==================== BANKING / FINANCIAL TABLES ====================
+
+// Bank connection status enum
+export const bankConnectionStatusEnum = pgEnum("bank_connection_status", [
+  "active",
+  "inactive",
+  "invalid",
+  "processing",
+  "deleted"
+]);
+
+// Bank account type enum
+export const bankAccountTypeEnum = pgEnum("bank_account_type", [
+  "transaction",
+  "savings",
+  "credit_card",
+  "loan",
+  "mortgage",
+  "investment",
+  "term_deposit",
+  "other"
+]);
+
+// Transaction direction enum
+export const transactionDirectionEnum = pgEnum("transaction_direction", [
+  "credit",
+  "debit"
+]);
+
+// Bank Connections - stores Basiq connection info
+export const bankConnections = pgTable("bank_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ownerUserId: varchar("owner_user_id").references(() => users.id),
+  basiqUserId: varchar("basiq_user_id", { length: 100 }),
+  basiqConnectionId: varchar("basiq_connection_id", { length: 100 }),
+  institutionId: varchar("institution_id", { length: 50 }).notNull(),
+  institutionName: varchar("institution_name", { length: 100 }),
+  status: bankConnectionStatusEnum("status").default("inactive").notNull(),
+  consentExpiresAt: timestamp("consent_expires_at"),
+  lastSyncedAt: timestamp("last_synced_at"),
+  refreshJobId: varchar("refresh_job_id", { length: 100 }),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Bank Accounts - stores account details from Basiq
+export const bankAccounts = pgTable("bank_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  connectionId: varchar("connection_id").notNull().references(() => bankConnections.id, { onDelete: "cascade" }),
+  basiqAccountId: varchar("basiq_account_id", { length: 100 }).notNull(),
+  name: varchar("name", { length: 200 }).notNull(),
+  accountHolder: varchar("account_holder", { length: 200 }),
+  accountNumberMasked: varchar("account_number_masked", { length: 50 }),
+  bsbMasked: varchar("bsb_masked", { length: 20 }),
+  accountType: bankAccountTypeEnum("account_type").default("transaction"),
+  currency: varchar("currency", { length: 10 }).default("AUD"),
+  balance: decimal("balance", { precision: 15, scale: 2 }),
+  availableFunds: decimal("available_funds", { precision: 15, scale: 2 }),
+  lastUpdatedAt: timestamp("last_updated_at"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Bank Transactions - stores transaction history from Basiq
+export const bankTransactions = pgTable("bank_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  accountId: varchar("account_id").notNull().references(() => bankAccounts.id, { onDelete: "cascade" }),
+  basiqTransactionId: varchar("basiq_transaction_id", { length: 100 }).notNull(),
+  description: text("description").notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  direction: transactionDirectionEnum("direction").notNull(),
+  status: varchar("status", { length: 50 }).default("posted"),
+  transactionDate: timestamp("transaction_date"),
+  postDate: timestamp("post_date"),
+  category: varchar("category", { length: 100 }),
+  subCategory: varchar("sub_category", { length: 100 }),
+  merchantName: varchar("merchant_name", { length: 200 }),
+  merchantLocation: varchar("merchant_location", { length: 200 }),
+  runningBalance: decimal("running_balance", { precision: 15, scale: 2 }),
+  rawData: jsonb("raw_data"),
+  importedAt: timestamp("imported_at").defaultNow().notNull(),
+});
+
+// Insert schemas for banking
+export const insertBankConnectionSchema = createInsertSchema(bankConnections).omit({ 
+  id: true, 
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertBankAccountSchema = createInsertSchema(bankAccounts).omit({ 
+  id: true, 
+  createdAt: true 
+});
+
+export const insertBankTransactionSchema = createInsertSchema(bankTransactions).omit({ 
+  id: true, 
+  importedAt: true 
+});
+
+// Types for banking
+export type InsertBankConnection = z.infer<typeof insertBankConnectionSchema>;
+export type BankConnection = typeof bankConnections.$inferSelect;
+
+export type InsertBankAccount = z.infer<typeof insertBankAccountSchema>;
+export type BankAccount = typeof bankAccounts.$inferSelect;
+
+export type InsertBankTransaction = z.infer<typeof insertBankTransactionSchema>;
+export type BankTransaction = typeof bankTransactions.$inferSelect;
