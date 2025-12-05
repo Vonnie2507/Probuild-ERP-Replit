@@ -5159,11 +5159,11 @@ export async function registerRoutes(
   // Get the published dashboard for a user's role (used by MyDashboard)
   app.get("/api/dashboard/my-layout", async (req, res) => {
     try {
-      if (!req.user) {
+      if (!req.session?.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const role = req.user.role;
+      const role = req.session.user.role;
       const layout = await storage.getPublishedLayoutForRole(role);
       
       if (!layout) {
@@ -5184,6 +5184,300 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching user dashboard:", error);
       res.status(500).json({ error: "Failed to fetch dashboard" });
+    }
+  });
+
+  // ============ FINANCIAL / BANKING (Basiq Integration) ============
+  
+  // Get all bank connections
+  app.get("/api/financial/connections", requireRoles("admin", "scheduler", "production_manager"), async (req, res) => {
+    try {
+      const connections = await storage.getBankConnections();
+      res.json(connections);
+    } catch (error) {
+      console.error("Error fetching bank connections:", error);
+      res.status(500).json({ error: "Failed to fetch connections" });
+    }
+  });
+
+  // Get available institutions from Basiq
+  app.get("/api/financial/institutions", requireRoles("admin"), async (req, res) => {
+    try {
+      const { BasiqService } = await import("./services/basiq");
+      const basiq = new BasiqService();
+      const institutions = await basiq.getInstitutions();
+      
+      // Filter to show only major Australian banks that are operational
+      const filtered = institutions.filter((inst: any) => 
+        inst.status !== "major-outage" && 
+        inst.stage !== "alpha" &&
+        inst.authorization !== "other"
+      );
+      
+      res.json(filtered);
+    } catch (error) {
+      console.error("Error fetching institutions:", error);
+      res.status(500).json({ error: "Failed to fetch institutions" });
+    }
+  });
+
+  // Create a new bank connection
+  app.post("/api/financial/connections", requireRoles("admin"), async (req, res) => {
+    try {
+      const { institutionId, institutionName, loginId, password, email } = req.body;
+      
+      if (!institutionId || !loginId || !password) {
+        return res.status(400).json({ error: "institutionId, loginId, and password are required" });
+      }
+
+      const { BasiqService } = await import("./services/basiq");
+      const basiq = new BasiqService();
+      
+      // Create or get Basiq user
+      const basiqUser = await basiq.createUser(email || "admin@probuildpvc.com.au");
+      
+      // Create connection
+      const job = await basiq.createConnection(basiqUser.id, institutionId, loginId, password);
+      
+      // Store connection in database
+      const connection = await storage.createBankConnection({
+        ownerUserId: req.session?.userId || null,
+        basiqUserId: basiqUser.id,
+        basiqConnectionId: null,
+        institutionId,
+        institutionName: institutionName || null,
+        status: "processing",
+        refreshJobId: job.id,
+        metadata: { jobCreatedAt: new Date().toISOString() }
+      });
+
+      res.status(201).json({ 
+        connection, 
+        jobId: job.id,
+        message: "Connection initiated. Poll job status to track progress." 
+      });
+    } catch (error: any) {
+      console.error("Error creating bank connection:", error);
+      res.status(500).json({ error: error.message || "Failed to create connection" });
+    }
+  });
+
+  // Get job status for a connection
+  app.get("/api/financial/jobs/:jobId", requireRoles("admin"), async (req, res) => {
+    try {
+      const { BasiqService } = await import("./services/basiq");
+      const basiq = new BasiqService();
+      const job = await basiq.getJobStatus(req.params.jobId);
+      res.json(job);
+    } catch (error: any) {
+      console.error("Error fetching job status:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch job status" });
+    }
+  });
+
+  // Complete connection setup after job is done
+  app.post("/api/financial/connections/:id/complete", requireRoles("admin"), async (req, res) => {
+    try {
+      const connection = await storage.getBankConnectionById(req.params.id);
+      if (!connection) {
+        return res.status(404).json({ error: "Connection not found" });
+      }
+
+      if (!connection.refreshJobId || !connection.basiqUserId) {
+        return res.status(400).json({ error: "Connection is missing job or user ID" });
+      }
+
+      const { BasiqService } = await import("./services/basiq");
+      const basiq = new BasiqService();
+      
+      // Poll job to completion
+      const job = await basiq.pollJobUntilComplete(connection.refreshJobId);
+      
+      // Extract connection ID from job
+      const verifyStep = job.steps?.find((s: any) => s.title === "verify-credentials");
+      const basiqConnectionId = verifyStep?.result?.url?.split("/").pop();
+
+      // Update connection status
+      await storage.updateBankConnection(connection.id, {
+        basiqConnectionId,
+        status: "active",
+        lastSyncedAt: new Date()
+      });
+
+      // Sync accounts
+      await basiq.syncAccountsToDatabase(connection.id);
+
+      const updated = await storage.getBankConnectionById(connection.id);
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error completing connection:", error);
+      res.status(500).json({ error: error.message || "Failed to complete connection" });
+    }
+  });
+
+  // Get all bank accounts
+  app.get("/api/financial/accounts", requireRoles("admin", "scheduler", "production_manager"), async (req, res) => {
+    try {
+      const accounts = await storage.getBankAccounts();
+      res.json(accounts);
+    } catch (error) {
+      console.error("Error fetching bank accounts:", error);
+      res.status(500).json({ error: "Failed to fetch accounts" });
+    }
+  });
+
+  // Get account by ID with connection info
+  app.get("/api/financial/accounts/:id", requireRoles("admin", "scheduler", "production_manager"), async (req, res) => {
+    try {
+      const account = await storage.getBankAccountById(req.params.id);
+      if (!account) {
+        return res.status(404).json({ error: "Account not found" });
+      }
+      res.json(account);
+    } catch (error) {
+      console.error("Error fetching bank account:", error);
+      res.status(500).json({ error: "Failed to fetch account" });
+    }
+  });
+
+  // Get transactions for an account
+  app.get("/api/financial/accounts/:id/transactions", requireRoles("admin", "scheduler", "production_manager"), async (req, res) => {
+    try {
+      const { fromDate, toDate, category, direction, limit = "100", offset = "0" } = req.query;
+      
+      const transactions = await storage.getBankTransactions(req.params.id, {
+        fromDate: fromDate as string,
+        toDate: toDate as string,
+        category: category as string,
+        direction: direction as "credit" | "debit",
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string)
+      });
+      
+      res.json(transactions);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      res.status(500).json({ error: "Failed to fetch transactions" });
+    }
+  });
+
+  // Get all transactions across all accounts
+  app.get("/api/financial/transactions", requireRoles("admin", "scheduler", "production_manager"), async (req, res) => {
+    try {
+      const { fromDate, toDate, category, direction, limit = "100", offset = "0", search } = req.query;
+      
+      const transactions = await storage.getAllBankTransactions({
+        fromDate: fromDate as string,
+        toDate: toDate as string,
+        category: category as string,
+        direction: direction as "credit" | "debit",
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string),
+        search: search as string
+      });
+      
+      res.json(transactions);
+    } catch (error) {
+      console.error("Error fetching all transactions:", error);
+      res.status(500).json({ error: "Failed to fetch transactions" });
+    }
+  });
+
+  // Sync transactions for an account
+  app.post("/api/financial/accounts/:id/sync", requireRoles("admin"), async (req, res) => {
+    try {
+      const { fromDate } = req.body;
+      
+      const { BasiqService } = await import("./services/basiq");
+      const basiq = new BasiqService();
+      
+      const importedCount = await basiq.syncTransactionsToDatabase(req.params.id, fromDate);
+      
+      // Update account balance
+      const account = await storage.getBankAccountById(req.params.id);
+      if (account) {
+        const connection = await storage.getBankConnectionById(account.connectionId);
+        if (connection?.basiqUserId) {
+          const accounts = await basiq.getAccounts(connection.basiqUserId);
+          const basiqAccount = accounts.find((a: any) => a.id === account.basiqAccountId);
+          if (basiqAccount) {
+            await storage.updateBankAccount(account.id, {
+              balance: basiqAccount.balance,
+              availableFunds: basiqAccount.availableFunds,
+              lastUpdatedAt: new Date()
+            });
+          }
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        importedCount,
+        message: `Imported ${importedCount} new transactions` 
+      });
+    } catch (error: any) {
+      console.error("Error syncing transactions:", error);
+      res.status(500).json({ error: error.message || "Failed to sync transactions" });
+    }
+  });
+
+  // Get financial overview/summary
+  app.get("/api/financial/overview", requireRoles("admin", "scheduler", "production_manager"), async (req, res) => {
+    try {
+      const accounts = await storage.getBankAccounts();
+      const connections = await storage.getBankConnections();
+      
+      // Calculate totals
+      let totalBalance = 0;
+      let totalAvailable = 0;
+      
+      for (const account of accounts) {
+        if (account.isActive) {
+          totalBalance += parseFloat(account.balance || "0");
+          totalAvailable += parseFloat(account.availableFunds || "0");
+        }
+      }
+
+      // Get recent transactions (last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const recentTransactions = await storage.getAllBankTransactions({
+        fromDate: thirtyDaysAgo.toISOString().split("T")[0],
+        limit: 10
+      });
+
+      // Calculate income/expenses for the month
+      let monthlyIncome = 0;
+      let monthlyExpenses = 0;
+
+      const allRecentTx = await storage.getAllBankTransactions({
+        fromDate: thirtyDaysAgo.toISOString().split("T")[0],
+        limit: 1000
+      });
+
+      for (const tx of allRecentTx) {
+        const amount = parseFloat(tx.amount || "0");
+        if (tx.direction === "credit") {
+          monthlyIncome += amount;
+        } else {
+          monthlyExpenses += amount;
+        }
+      }
+
+      res.json({
+        totalBalance,
+        totalAvailable,
+        monthlyIncome,
+        monthlyExpenses,
+        accountCount: accounts.filter(a => a.isActive).length,
+        connectionCount: connections.filter(c => c.status === "active").length,
+        recentTransactions,
+        lastSyncedAt: connections.length > 0 ? connections[0].lastSyncedAt : null
+      });
+    } catch (error) {
+      console.error("Error fetching financial overview:", error);
+      res.status(500).json({ error: "Failed to fetch overview" });
     }
   });
 

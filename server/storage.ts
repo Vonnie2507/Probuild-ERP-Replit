@@ -11,6 +11,7 @@ import {
   policyAcknowledgements, resources, knowledgeArticles,
   jobSetupDocuments, jobSetupProducts, liveDocumentTemplates,
   leadActivities, leadTasks, staffLeaveBalances,
+  bankConnections, bankAccounts, bankTransactions,
   type User, type InsertUser,
   type StaffLeaveBalance, type InsertStaffLeaveBalance,
   type Client, type InsertClient,
@@ -61,6 +62,9 @@ import {
   type DashboardWidget, type InsertDashboardWidget,
   type RoleDashboardLayout, type InsertRoleDashboardLayout,
   type DashboardWidgetInstance, type InsertDashboardWidgetInstance,
+  type BankConnection, type InsertBankConnection,
+  type BankAccount, type InsertBankAccount,
+  type BankTransaction, type InsertBankTransaction,
   dashboardWidgets, roleDashboardLayouts, dashboardWidgetInstances,
 } from "@shared/schema";
 
@@ -492,6 +496,42 @@ export interface IStorage {
   deleteDashboardWidgetInstance(id: string): Promise<boolean>;
   deleteDashboardWidgetInstancesByLayout(layoutId: string): Promise<boolean>;
   saveDashboardLayout(layoutId: string, instances: InsertDashboardWidgetInstance[]): Promise<DashboardWidgetInstance[]>;
+
+  // ============================================
+  // BANKING / FINANCIAL
+  // ============================================
+
+  // Bank Connections
+  getBankConnections(): Promise<BankConnection[]>;
+  getBankConnectionById(id: string): Promise<BankConnection | undefined>;
+  createBankConnection(connection: InsertBankConnection): Promise<BankConnection>;
+  updateBankConnection(id: string, connection: Partial<InsertBankConnection>): Promise<BankConnection | undefined>;
+  deleteBankConnection(id: string): Promise<boolean>;
+
+  // Bank Accounts
+  getBankAccounts(): Promise<BankAccount[]>;
+  getBankAccountsByConnection(connectionId: string): Promise<BankAccount[]>;
+  getBankAccountById(id: string): Promise<BankAccount | undefined>;
+  createBankAccount(account: InsertBankAccount): Promise<BankAccount>;
+  updateBankAccount(id: string, account: Partial<InsertBankAccount>): Promise<BankAccount | undefined>;
+  deleteBankAccount(id: string): Promise<boolean>;
+
+  // Bank Transactions
+  getBankTransactions(accountId: string, filters?: TransactionFilters): Promise<BankTransaction[]>;
+  getAllBankTransactions(filters?: TransactionFilters): Promise<BankTransaction[]>;
+  getBankTransactionById(id: string): Promise<BankTransaction | undefined>;
+  createBankTransaction(transaction: InsertBankTransaction): Promise<BankTransaction>;
+  createBankTransactions(transactions: InsertBankTransaction[]): Promise<BankTransaction[]>;
+}
+
+export interface TransactionFilters {
+  fromDate?: string;
+  toDate?: string;
+  category?: string;
+  direction?: "credit" | "debit";
+  limit?: number;
+  offset?: number;
+  search?: string;
 }
 
 export interface DashboardStats {
@@ -2902,6 +2942,161 @@ export class DatabaseStorage implements IStorage {
     const result = await db.insert(dashboardWidgetInstances)
       .values(instances.map(i => ({ ...i, layoutId })))
       .returning();
+    return result;
+  }
+
+  // ============================================
+  // BANKING / FINANCIAL
+  // ============================================
+
+  // Bank Connections
+  async getBankConnections(): Promise<BankConnection[]> {
+    return db.select().from(bankConnections).orderBy(desc(bankConnections.createdAt));
+  }
+
+  async getBankConnectionById(id: string): Promise<BankConnection | undefined> {
+    const [connection] = await db.select().from(bankConnections).where(eq(bankConnections.id, id));
+    return connection;
+  }
+
+  async createBankConnection(connection: InsertBankConnection): Promise<BankConnection> {
+    const [created] = await db.insert(bankConnections).values(connection).returning();
+    return created;
+  }
+
+  async updateBankConnection(id: string, connection: Partial<InsertBankConnection>): Promise<BankConnection | undefined> {
+    const [updated] = await db.update(bankConnections)
+      .set({ ...connection, updatedAt: new Date() })
+      .where(eq(bankConnections.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteBankConnection(id: string): Promise<boolean> {
+    const result = await db.delete(bankConnections).where(eq(bankConnections.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Bank Accounts
+  async getBankAccounts(): Promise<BankAccount[]> {
+    return db.select().from(bankAccounts).where(eq(bankAccounts.isActive, true)).orderBy(bankAccounts.name);
+  }
+
+  async getBankAccountsByConnection(connectionId: string): Promise<BankAccount[]> {
+    return db.select().from(bankAccounts)
+      .where(and(eq(bankAccounts.connectionId, connectionId), eq(bankAccounts.isActive, true)))
+      .orderBy(bankAccounts.name);
+  }
+
+  async getBankAccountById(id: string): Promise<BankAccount | undefined> {
+    const [account] = await db.select().from(bankAccounts).where(eq(bankAccounts.id, id));
+    return account;
+  }
+
+  async createBankAccount(account: InsertBankAccount): Promise<BankAccount> {
+    const [created] = await db.insert(bankAccounts).values(account).returning();
+    return created;
+  }
+
+  async updateBankAccount(id: string, account: Partial<InsertBankAccount>): Promise<BankAccount | undefined> {
+    const [updated] = await db.update(bankAccounts)
+      .set(account)
+      .where(eq(bankAccounts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteBankAccount(id: string): Promise<boolean> {
+    const result = await db.delete(bankAccounts).where(eq(bankAccounts.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Bank Transactions
+  async getBankTransactions(accountId: string, filters?: TransactionFilters): Promise<BankTransaction[]> {
+    const conditions = [eq(bankTransactions.accountId, accountId)];
+    
+    if (filters?.fromDate) {
+      conditions.push(gte(bankTransactions.postDate, new Date(filters.fromDate)));
+    }
+    if (filters?.toDate) {
+      conditions.push(lte(bankTransactions.postDate, new Date(filters.toDate)));
+    }
+    if (filters?.category) {
+      conditions.push(eq(bankTransactions.category, filters.category));
+    }
+    if (filters?.direction) {
+      conditions.push(eq(bankTransactions.direction, filters.direction));
+    }
+    if (filters?.search) {
+      conditions.push(or(
+        ilike(bankTransactions.description, `%${filters.search}%`),
+        ilike(bankTransactions.merchantName, `%${filters.search}%`)
+      )!);
+    }
+
+    let query = db.select().from(bankTransactions)
+      .where(and(...conditions))
+      .orderBy(desc(bankTransactions.postDate));
+    
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as typeof query;
+    }
+    if (filters?.offset) {
+      query = query.offset(filters.offset) as typeof query;
+    }
+
+    return query;
+  }
+
+  async getAllBankTransactions(filters?: TransactionFilters): Promise<BankTransaction[]> {
+    const conditions: any[] = [];
+    
+    if (filters?.fromDate) {
+      conditions.push(gte(bankTransactions.postDate, new Date(filters.fromDate)));
+    }
+    if (filters?.toDate) {
+      conditions.push(lte(bankTransactions.postDate, new Date(filters.toDate)));
+    }
+    if (filters?.category) {
+      conditions.push(eq(bankTransactions.category, filters.category));
+    }
+    if (filters?.direction) {
+      conditions.push(eq(bankTransactions.direction, filters.direction));
+    }
+    if (filters?.search) {
+      conditions.push(or(
+        ilike(bankTransactions.description, `%${filters.search}%`),
+        ilike(bankTransactions.merchantName, `%${filters.search}%`)
+      ));
+    }
+
+    let query = conditions.length > 0 
+      ? db.select().from(bankTransactions).where(and(...conditions)).orderBy(desc(bankTransactions.postDate))
+      : db.select().from(bankTransactions).orderBy(desc(bankTransactions.postDate));
+    
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as typeof query;
+    }
+    if (filters?.offset) {
+      query = query.offset(filters.offset) as typeof query;
+    }
+
+    return query;
+  }
+
+  async getBankTransactionById(id: string): Promise<BankTransaction | undefined> {
+    const [transaction] = await db.select().from(bankTransactions).where(eq(bankTransactions.id, id));
+    return transaction;
+  }
+
+  async createBankTransaction(transaction: InsertBankTransaction): Promise<BankTransaction> {
+    const [created] = await db.insert(bankTransactions).values(transaction).returning();
+    return created;
+  }
+
+  async createBankTransactions(transactions: InsertBankTransaction[]): Promise<BankTransaction[]> {
+    if (transactions.length === 0) return [];
+    const result = await db.insert(bankTransactions).values(transactions).returning();
     return result;
   }
 }
