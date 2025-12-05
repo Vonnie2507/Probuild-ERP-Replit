@@ -11,8 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Collapsible,
   CollapsibleContent,
@@ -77,6 +79,10 @@ export function CallLogEntry({ activity, users, leadId, onCreateTask }: CallLogE
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedNotes, setEditedNotes] = useState(activity.callNotes || "");
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskPriority, setTaskPriority] = useState("medium");
+  const [taskAssignee, setTaskAssignee] = useState("");
 
   const direction = (activity.callDirection || "outbound") as keyof typeof callDirectionConfig;
   const config = callDirectionConfig[direction];
@@ -118,8 +124,36 @@ export function CallLogEntry({ activity, users, leadId, onCreateTask }: CallLogE
     },
   });
 
+  const createTaskMutation = useMutation({
+    mutationFn: async (data: { title: string; priority: string; assignedTo?: string; sourceActivityId: string }) => {
+      return apiRequest("POST", `/api/leads/${leadId}/tasks`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", leadId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-activities", activity.id, "tasks"] });
+      toast({ title: "Task created and linked to call" });
+      setShowTaskForm(false);
+      setTaskTitle("");
+      setTaskPriority("medium");
+      setTaskAssignee("");
+    },
+    onError: () => {
+      toast({ title: "Failed to create task", variant: "destructive" });
+    },
+  });
+
   const handleSaveNotes = () => {
     updateActivityMutation.mutate({ callNotes: editedNotes });
+  };
+
+  const handleCreateTask = () => {
+    if (!taskTitle.trim()) return;
+    createTaskMutation.mutate({
+      title: taskTitle.trim(),
+      priority: taskPriority,
+      sourceActivityId: activity.id,
+      assignedTo: taskAssignee && taskAssignee !== "unassigned" ? taskAssignee : undefined,
+    });
   };
 
   const hasDetails = activity.callNotes || activity.callTranscriptionText || activity.aiSummaryText || activity.audioRecordingUrl;
@@ -348,11 +382,69 @@ export function CallLogEntry({ activity, users, leadId, onCreateTask }: CallLogE
               </div>
             )}
 
-            {onCreateTask && (
+            {showTaskForm ? (
+              <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
+                <span className="text-xs font-medium text-muted-foreground uppercase block">Create Task from Call</span>
+                <Input
+                  placeholder="Task title..."
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  data-testid={`input-task-title-${activity.id}`}
+                  autoFocus
+                />
+                <div className="flex gap-2 flex-wrap">
+                  <Select value={taskPriority} onValueChange={setTaskPriority}>
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={taskAssignee} onValueChange={setTaskAssignee}>
+                    <SelectTrigger className="w-[160px]" data-testid={`select-task-assignee-${activity.id}`}>
+                      <SelectValue placeholder="Assign to..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.firstName} {user.lastName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleCreateTask}
+                    disabled={!taskTitle.trim() || createTaskMutation.isPending}
+                    data-testid={`button-submit-task-${activity.id}`}
+                  >
+                    {createTaskMutation.isPending ? "Creating..." : "Create Task"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setShowTaskForm(false);
+                      setTaskTitle("");
+                      setTaskAssignee("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => onCreateTask(activity.id)}
+                onClick={() => setShowTaskForm(true)}
                 data-testid={`button-create-task-from-call-${activity.id}`}
               >
                 <Plus className="h-3 w-3 mr-1" />
