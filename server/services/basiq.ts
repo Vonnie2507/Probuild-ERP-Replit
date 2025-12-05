@@ -96,18 +96,20 @@ export class BasiqService {
     mobile?: string;
     firstName?: string;
     lastName?: string;
+    businessName?: string;
   }): Promise<any> {
-    // Basiq v3 expects minimal user structure - NO business fields at user creation
+    // Basiq v3 user creation - businessName is required for business accounts
     const body: any = { 
-      email: params.email
+      email: params.email,
+      businessName: params.businessName || "Probuild PVC"
     };
     
-    // Add optional mobile in international format
-    if (params.mobile) {
+    // Add optional mobile in international format (must start with +61 for Australia)
+    if (params.mobile && params.mobile.startsWith("+")) {
       body.mobile = params.mobile;
     }
     
-    // Add name if provided (Basiq expects firstName/lastName at top level)
+    // Add name if provided
     if (params.firstName) {
       body.firstName = params.firstName;
     }
