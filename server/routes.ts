@@ -275,6 +275,80 @@ export async function registerRoutes(
     })));
   });
 
+  // ============ SOIL DATA ============
+  app.get("/api/soil-data", async (req, res) => {
+    try {
+      const { lat, lng } = req.query;
+      
+      if (!lat || !lng || typeof lat !== "string" || typeof lng !== "string") {
+        return res.status(400).json({ error: "Missing lat/lng parameters" });
+      }
+      
+      const latitude = parseFloat(lat);
+      const longitude = parseFloat(lng);
+      
+      if (isNaN(latitude) || isNaN(longitude)) {
+        return res.status(400).json({ error: "Invalid lat/lng values" });
+      }
+      
+      // Call ASRIS (CSIRO) Soil API
+      const asrisUrl = `https://asris.csiro.au/ASRISApi/api/APSIM/getApsoil?longitude=${longitude}&latitude=${latitude}`;
+      
+      const response = await fetch(asrisUrl);
+      if (!response.ok) {
+        throw new Error("Failed to fetch soil data from ASRIS");
+      }
+      
+      const xmlText = await response.text();
+      
+      // Parse key soil information from XML
+      const extractValue = (tag: string): string | null => {
+        const match = xmlText.match(new RegExp(`<${tag}>([^<]+)</${tag}>`));
+        return match ? match[1] : null;
+      };
+      
+      const soilType = extractValue("SoilType");
+      const region = extractValue("Region");
+      const nearestTown = extractValue("NearestTown");
+      const naturalVegetation = extractValue("NaturalVegetation");
+      const state = extractValue("State");
+      const ascOrder = extractValue("ASCOrder");
+      const comments = extractValue("Comments");
+      
+      // Determine installation difficulty based on soil type
+      let installationNotes = "";
+      if (soilType) {
+        const soilLower = soilType.toLowerCase();
+        if (soilLower.includes("sand") || soilLower.includes("loamy sand")) {
+          installationNotes = "Easy digging - standard auger should work well";
+        } else if (soilLower.includes("loam")) {
+          installationNotes = "Moderate digging - standard equipment suitable";
+        } else if (soilLower.includes("clay")) {
+          installationNotes = "Harder digging - may require more time/effort";
+        } else if (soilLower.includes("rock") || soilLower.includes("limestone")) {
+          installationNotes = "Core drill likely required";
+        } else if (soilLower.includes("gravel")) {
+          installationNotes = "Mixed conditions - check site for rock presence";
+        }
+      }
+      
+      res.json({
+        soilType: soilType || "Unknown",
+        region: region || null,
+        nearestTown: nearestTown || null,
+        naturalVegetation: naturalVegetation || null,
+        state: state || null,
+        ascOrder: ascOrder !== "NA" ? ascOrder : null,
+        comments: comments || null,
+        installationNotes: installationNotes || null,
+        source: "CSIRO ASRIS",
+      });
+    } catch (error) {
+      console.error("Error fetching soil data:", error);
+      res.status(500).json({ error: "Failed to fetch soil data" });
+    }
+  });
+
   // ============ GLOBAL SEARCH ============
   // Only internal staff roles can search - excludes trade_client and installer
   app.get("/api/search", requireRoles("admin", "sales", "scheduler", "production_manager", "warehouse"), async (req, res) => {
