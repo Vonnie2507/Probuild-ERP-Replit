@@ -120,22 +120,24 @@ export class BasiqService {
 
   /**
    * Create a Basiq user (required before consent)
-   * Requires email or mobile + businessName
+   * Requires email or mobile + businessName + businessIdNo
    */
-  async createUser(businessName?: string, email?: string, mobile?: string): Promise<string> {
+  async createUser(businessName?: string, businessIdNo?: string, email?: string, mobile?: string): Promise<string> {
     console.log("Creating Basiq user for business:", businessName || BUSINESS_DETAILS.businessName);
     
     // Use provided values or fall back to environment variables
     const contactEmail = email || process.env.BASIQ_CONTACT_EMAIL;
     const contactMobile = mobile || process.env.BASIQ_CONTACT_MOBILE;
     const contactBusinessName = businessName || BUSINESS_DETAILS.businessName;
+    const contactBusinessIdNo = businessIdNo || BUSINESS_DETAILS.businessIdNo;
     
     if (!contactEmail && !contactMobile) {
       throw new Error("Basiq user creation requires either email or mobile. Set BASIQ_CONTACT_EMAIL or BASIQ_CONTACT_MOBILE environment variables.");
     }
     
     const userData: any = {
-      businessName: contactBusinessName
+      businessName: contactBusinessName,
+      businessIdNo: contactBusinessIdNo
     };
     if (contactEmail) userData.email = contactEmail;
     if (contactMobile) userData.mobile = contactMobile;
@@ -174,10 +176,11 @@ export class BasiqService {
     });
     
     const finalBusinessName = businessName || BUSINESS_DETAILS.businessName;
+    const finalBusinessIdNo = businessIdNo || BUSINESS_DETAILS.businessIdNo;
     const finalEmail = email || process.env.BASIQ_CONTACT_EMAIL;
     
-    // Step 1: Create a Basiq user with business name and contact email
-    const userId = await this.createUser(finalBusinessName, finalEmail);
+    // Step 1: Create a Basiq user with business name, ID, and contact email
+    const userId = await this.createUser(finalBusinessName, finalBusinessIdNo, finalEmail);
     console.log("Created Basiq user:", userId);
     
     // Step 2: Get a CLIENT_ACCESS token bound to this user
