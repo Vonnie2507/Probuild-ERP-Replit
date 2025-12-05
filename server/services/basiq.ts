@@ -39,7 +39,7 @@ export class BasiqService {
     const response = await fetch(`${BASIQ_BASE_URL}/token`, {
       method: "POST",
       headers: {
-        "X-Api-Key": this.apiKey,
+        "Authorization": `Basic ${this.apiKey}`,
         "Content-Type": "application/json",
         "basiq-version": "3.0"
       },
