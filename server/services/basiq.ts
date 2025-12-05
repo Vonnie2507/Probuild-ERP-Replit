@@ -111,6 +111,27 @@ export class BasiqService {
     return this.makeRequest(`/users/${userId}`);
   }
 
+  async getClientToken(userId: string): Promise<string> {
+    // Get a CLIENT_ACCESS token bound to a specific user for the consent UI
+    const response = await fetch(`${BASIQ_BASE_URL}/token`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${this.apiKey}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "basiq-version": "3.0"
+      },
+      body: `scope=CLIENT_ACCESS&userId=${userId}`
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to get Basiq client token: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.access_token;
+  }
+
   async createConnection(userId: string, institutionId: string, loginId: string, password: string): Promise<any> {
     return this.makeRequest(`/users/${userId}/connections`, {
       method: "POST",

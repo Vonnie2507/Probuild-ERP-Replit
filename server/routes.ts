@@ -5189,6 +5189,69 @@ export async function registerRoutes(
 
   // ============ FINANCIAL / BANKING (Basiq Integration) ============
   
+  // Basiq callback endpoint - handles redirect after consent UI completion
+  app.get("/api/financial/callback", async (req, res) => {
+    try {
+      // Basiq redirects with jobIds in the URL
+      const { jobIds, error } = req.query;
+      
+      if (error) {
+        console.error("Basiq callback error:", error);
+        // Redirect to financial page with error
+        return res.redirect(`/financial?error=${encodeURIComponent(error as string)}`);
+      }
+      
+      // Redirect to financial page with success and job IDs
+      const redirectUrl = jobIds 
+        ? `/financial?success=true&jobIds=${encodeURIComponent(jobIds as string)}`
+        : `/financial?success=true`;
+      
+      console.log("Basiq callback received, redirecting to:", redirectUrl);
+      res.redirect(redirectUrl);
+    } catch (error) {
+      console.error("Error handling Basiq callback:", error);
+      res.redirect("/financial?error=callback_failed");
+    }
+  });
+
+  // Manage consent URL - for users to manage their data sharing consent
+  app.get("/api/financial/manage-consent", async (req, res) => {
+    try {
+      // This endpoint handles when users want to manage their consent
+      // Basiq may redirect here for consent management
+      res.redirect("/financial?tab=connections&action=manage-consent");
+    } catch (error) {
+      console.error("Error handling manage consent:", error);
+      res.redirect("/financial");
+    }
+  });
+
+  // Get Basiq consent URL for a user (initiates the consent flow)
+  app.post("/api/financial/consent-url", requireRoles("admin"), async (req, res) => {
+    try {
+      const { email } = req.body;
+      const { BasiqService } = await import("./services/basiq");
+      const basiq = new BasiqService();
+      
+      // Create or get user
+      const basiqUser = await basiq.createUser(email || "admin@probuildpvc.com.au");
+      
+      // Get client token bound to user (needed for consent UI)
+      const clientToken = await basiq.getClientToken(basiqUser.id);
+      
+      // Build consent URL
+      const consentUrl = `https://consent.basiq.io/home?token=${clientToken}`;
+      
+      res.json({ 
+        consentUrl,
+        userId: basiqUser.id 
+      });
+    } catch (error: any) {
+      console.error("Error generating consent URL:", error);
+      res.status(500).json({ error: error.message || "Failed to generate consent URL" });
+    }
+  });
+
   // Get all bank connections
   app.get("/api/financial/connections", requireRoles("admin", "scheduler", "production_manager"), async (req, res) => {
     try {
