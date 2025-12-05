@@ -36,10 +36,13 @@ export class BasiqService {
       return cachedToken.accessToken;
     }
 
+    // Basiq Basic auth format: base64("apikey:" + BASIQ_API_KEY)
+    const credentials = Buffer.from(`${this.apiKey}:`).toString('base64');
+
     const response = await fetch(`${BASIQ_BASE_URL}/token`, {
       method: "POST",
       headers: {
-        "Authorization": `Basic ${this.apiKey}`,
+        "Authorization": `Basic ${credentials}`,
         "Content-Type": "application/x-www-form-urlencoded",
         "basiq-version": "3.0"
       },
