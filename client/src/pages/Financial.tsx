@@ -37,6 +37,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel,
 } from "@/components/ui/select";
 import {
   Table,
@@ -728,61 +730,48 @@ export default function Financial() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Select Bank</FormLabel>
-                    <FormControl>
-                      <div className="space-y-2">
-                        <Input
-                          placeholder="Search banks..."
-                          value={institutionSearch}
-                          onChange={(e) => setInstitutionSearch(e.target.value)}
-                          data-testid="input-institution-search"
-                        />
-                        <div className="border rounded-md bg-background max-h-[200px] overflow-y-auto">
-                          {institutionsLoading ? (
-                            <div className="p-4 text-center">
-                              <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                              <p className="text-sm text-muted-foreground mt-2">Loading banks...</p>
-                            </div>
-                          ) : filteredInstitutions.length > 0 ? (
-                            <div className="divide-y">
-                              {filteredInstitutions.map((inst) => (
-                                <button
-                                  key={inst.id}
-                                  type="button"
-                                  className={`w-full p-3 flex items-center gap-3 hover:bg-muted transition-colors text-left ${
-                                    field.value === inst.id ? "bg-primary/10" : ""
-                                  }`}
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    field.onChange(inst.id);
-                                  }}
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-institution">
+                          <SelectValue placeholder="Search and select your bank..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="max-h-[300px]">
+                        {institutionsLoading ? (
+                          <div className="p-4 text-center text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                            Loading banks...
+                          </div>
+                        ) : (
+                          <>
+                            <SelectGroup>
+                              <SelectLabel>Australian Banks</SelectLabel>
+                              {filteredInstitutions.filter(i => i.id.startsWith("AU")).map((inst) => (
+                                <SelectItem 
+                                  key={inst.id} 
+                                  value={inst.id}
                                   data-testid={`option-institution-${inst.id}`}
                                 >
-                                  <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0">
-                                    {inst.logo?.links?.full ? (
-                                      <img 
-                                        src={inst.logo.links.full} 
-                                        alt={inst.name}
-                                        className="h-6 w-6 object-contain"
-                                      />
-                                    ) : (
-                                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                                    )}
-                                  </div>
-                                  <div>
-                                    <p className="font-medium text-sm">{inst.name}</p>
-                                    <p className="text-xs text-muted-foreground">{inst.institutionType}</p>
-                                  </div>
-                                </button>
+                                  {inst.name}
+                                </SelectItem>
                               ))}
-                            </div>
-                          ) : (
-                            <div className="p-4 text-center text-muted-foreground text-sm">
-                              {institutionSearch ? "No banks found" : "Type to search banks"}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </FormControl>
+                            </SelectGroup>
+                            <SelectGroup>
+                              <SelectLabel>New Zealand Banks</SelectLabel>
+                              {filteredInstitutions.filter(i => i.id.startsWith("NZ")).map((inst) => (
+                                <SelectItem 
+                                  key={inst.id} 
+                                  value={inst.id}
+                                  data-testid={`option-institution-${inst.id}`}
+                                >
+                                  {inst.name}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
