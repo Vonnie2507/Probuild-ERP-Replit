@@ -322,6 +322,9 @@ export default function Financial() {
   const [showConnectDialog, setShowConnectDialog] = useState(false);
   const [businessName, setBusinessName] = useState("");
   const [businessIdNo, setBusinessIdNo] = useState("");
+  const [organisationType, setOrganisationType] = useState("");
+  const [sharingDuration, setSharingDuration] = useState("");
+  const [email, setEmail] = useState("");
   const [, setLocation] = useLocation();
   const isAdmin = user?.role === "admin";
 
@@ -414,14 +417,20 @@ export default function Financial() {
   const connectBankMutation = useMutation({
     mutationFn: async () => {
       return apiRequest("POST", "/api/financial/connect-bank", {
-        businessName: businessName,
-        businessIdNo: businessIdNo
+        businessName,
+        businessIdNo,
+        organisationType,
+        sharingDuration: parseInt(sharingDuration) || 365,
+        email
       });
     },
     onSuccess: (data: any) => {
       setShowConnectDialog(false);
       setBusinessName("");
       setBusinessIdNo("");
+      setOrganisationType("");
+      setSharingDuration("");
+      setEmail("");
       
       if (data.connectUrl) {
         toast({ 
@@ -781,6 +790,41 @@ export default function Financial() {
                   data-testid="input-business-id"
                 />
               </div>
+
+              <div>
+                <Label htmlFor="organisationType" className="text-sm font-medium">Organisation Type</Label>
+                <Input 
+                  id="organisationType"
+                  placeholder="e.g., COMPANY" 
+                  value={organisationType}
+                  onChange={(e) => setOrganisationType(e.target.value)}
+                  data-testid="input-organisation-type"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="sharingDuration" className="text-sm font-medium">Sharing Duration (days)</Label>
+                <Input 
+                  id="sharingDuration"
+                  placeholder="e.g., 365" 
+                  value={sharingDuration}
+                  onChange={(e) => setSharingDuration(e.target.value)}
+                  data-testid="input-sharing-duration"
+                  type="number"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+                <Input 
+                  id="email"
+                  placeholder="e.g., vonnie@probuildpvc.com.au" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  data-testid="input-email"
+                  type="email"
+                />
+              </div>
             </div>
 
             <div className="bg-muted/50 rounded-lg p-4 space-y-2">
@@ -802,6 +846,9 @@ export default function Financial() {
                 setShowConnectDialog(false);
                 setBusinessName("");
                 setBusinessIdNo("");
+                setOrganisationType("");
+                setSharingDuration("");
+                setEmail("");
               }}
               className="w-full sm:w-auto"
               data-testid="button-cancel-connection"
@@ -810,7 +857,7 @@ export default function Financial() {
             </Button>
             <Button 
               onClick={() => connectBankMutation.mutate()}
-              disabled={connectBankMutation.isPending || !businessName || !businessIdNo}
+              disabled={connectBankMutation.isPending || !businessName || !businessIdNo || !organisationType || !sharingDuration || !email}
               className="w-full sm:w-auto"
               data-testid="button-start-connection"
             >

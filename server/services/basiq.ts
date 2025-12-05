@@ -158,13 +158,26 @@ export class BasiqService {
    * 2. Get a CLIENT_ACCESS token bound to that user
    * 3. Return the Consent UI URL for the user to complete consent
    */
-  async createCDRConsent(businessName?: string, businessIdNo?: string): Promise<{ userId: string; connectUrl: string }> {
-    console.log("Starting CDR consent flow...");
+  async createCDRConsent(
+    businessName?: string,
+    businessIdNo?: string,
+    organisationType?: string,
+    sharingDuration?: number,
+    email?: string
+  ): Promise<{ userId: string; connectUrl: string }> {
+    console.log("Starting CDR consent flow with params:", {
+      businessName,
+      businessIdNo,
+      organisationType,
+      sharingDuration,
+      email
+    });
+    
     const finalBusinessName = businessName || BUSINESS_DETAILS.businessName;
-    console.log("Business:", finalBusinessName);
+    const finalEmail = email || process.env.BASIQ_CONTACT_EMAIL;
     
     // Step 1: Create a Basiq user with business name and contact email
-    const userId = await this.createUser(finalBusinessName);
+    const userId = await this.createUser(finalBusinessName, finalEmail);
     console.log("Created Basiq user:", userId);
     
     // Step 2: Get a CLIENT_ACCESS token bound to this user
