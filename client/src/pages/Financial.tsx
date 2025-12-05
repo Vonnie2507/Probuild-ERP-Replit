@@ -736,25 +736,28 @@ export default function Financial() {
                           onChange={(e) => setInstitutionSearch(e.target.value)}
                           data-testid="input-institution-search"
                         />
-                        <div className="border rounded-md bg-background">
+                        <div className="border rounded-md bg-background max-h-[200px] overflow-y-auto">
                           {institutionsLoading ? (
                             <div className="p-4 text-center">
                               <Loader2 className="h-4 w-4 animate-spin mx-auto" />
                               <p className="text-sm text-muted-foreground mt-2">Loading banks...</p>
                             </div>
                           ) : filteredInstitutions.length > 0 ? (
-                            <div className="divide-y max-h-[200px] overflow-y-auto">
+                            <div className="divide-y">
                               {filteredInstitutions.map((inst) => (
-                                <div
+                                <button
                                   key={inst.id}
-                                  className={`p-3 flex items-center gap-3 cursor-pointer hover:bg-muted ${
+                                  type="button"
+                                  className={`w-full p-3 flex items-center gap-3 hover:bg-muted transition-colors text-left ${
                                     field.value === inst.id ? "bg-primary/10" : ""
                                   }`}
-                                  onClick={() => field.onChange(inst.id)}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    field.onChange(inst.id);
+                                  }}
                                   data-testid={`option-institution-${inst.id}`}
-                                  role="button"
                                 >
-                                  <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0 pointer-events-none">
+                                  <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0">
                                     {inst.logo?.links?.full ? (
                                       <img 
                                         src={inst.logo.links.full} 
@@ -765,11 +768,11 @@ export default function Financial() {
                                       <Building2 className="h-4 w-4 text-muted-foreground" />
                                     )}
                                   </div>
-                                  <div className="pointer-events-none">
+                                  <div>
                                     <p className="font-medium text-sm">{inst.name}</p>
                                     <p className="text-xs text-muted-foreground">{inst.institutionType}</p>
                                   </div>
-                                </div>
+                                </button>
                               ))}
                             </div>
                           ) : (
