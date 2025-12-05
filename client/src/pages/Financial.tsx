@@ -414,8 +414,8 @@ export default function Financial() {
   const connectBankMutation = useMutation({
     mutationFn: async () => {
       return apiRequest("POST", "/api/financial/connect-bank", {
-        businessName: businessName || "Probuild PVC",
-        businessIdNo: businessIdNo || "29688327479"
+        businessName: businessName,
+        businessIdNo: businessIdNo
       });
     },
     onSuccess: (data: any) => {
