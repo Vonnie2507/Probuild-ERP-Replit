@@ -27,20 +27,11 @@ declare global {
   }
 }
 
-let googleMapsLoaded = false;
-let googleMapsLoading = false;
-const loadCallbacks: (() => void)[] = [];
-
 function loadGoogleMapsScript(): Promise<void> {
   return new Promise((resolve) => {
-    if (googleMapsLoaded && window.google?.maps?.places) {
+    // Check if already loaded (handles hot reload)
+    if (window.google?.maps?.places) {
       resolve();
-      return;
-    }
-
-    loadCallbacks.push(resolve);
-
-    if (googleMapsLoading) {
       return;
     }
 
@@ -50,19 +41,33 @@ function loadGoogleMapsScript(): Promise<void> {
       return;
     }
 
-    googleMapsLoading = true;
+    // Check if script is already being loaded
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
+    if (existingScript) {
+      // Poll until loaded
+      const checkLoaded = setInterval(() => {
+        if (window.google?.maps?.places) {
+          clearInterval(checkLoaded);
+          resolve();
+        }
+      }, 100);
+      return;
+    }
 
-    window.initGoogleMapsCallback = () => {
-      googleMapsLoaded = true;
-      googleMapsLoading = false;
-      loadCallbacks.forEach(cb => cb());
-      loadCallbacks.length = 0;
-    };
-
+    // Create and load the script
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsCallback`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
     script.async = true;
     script.defer = true;
+    script.onload = () => {
+      // Poll until places is available
+      const checkLoaded = setInterval(() => {
+        if (window.google?.maps?.places) {
+          clearInterval(checkLoaded);
+          resolve();
+        }
+      }, 50);
+    };
     document.head.appendChild(script);
   });
 }
