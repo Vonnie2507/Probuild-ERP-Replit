@@ -658,6 +658,7 @@ export default function Leads() {
                     if (selectedClientId) setSelectedClientId(null);
                   }}
                   placeholder="Enter site address"
+                  showStreetView={true}
                   data-testid="input-address"
                 />
               </div>
@@ -850,6 +851,7 @@ export default function Leads() {
                 value={formData.address}
                 onChange={(value) => setFormData({ ...formData, address: value })}
                 placeholder="Enter site address"
+                showStreetView={true}
                 data-testid="input-edit-address"
               />
             </div>

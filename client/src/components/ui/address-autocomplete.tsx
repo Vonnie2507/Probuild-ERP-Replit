@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
-import { Loader2, MapPin } from "lucide-react";
+import { Loader2, MapPin, ImageOff } from "lucide-react";
 
 interface AddressAutocompleteProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  showStreetView?: boolean;
   "data-testid"?: string;
 }
 
@@ -66,11 +67,66 @@ function loadGoogleMapsScript(): Promise<void> {
   });
 }
 
+function StreetViewPreview({ address }: { address: string }) {
+  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
+  useEffect(() => {
+    setHasError(false);
+    setIsLoading(true);
+  }, [address]);
+
+  if (!apiKey || !address || address.length < 10) {
+    return null;
+  }
+
+  const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${encodeURIComponent(address)}&key=${apiKey}`;
+
+  return (
+    <div className="mt-2 rounded-md overflow-hidden border bg-muted/30">
+      {isLoading && !hasError && (
+        <div className="h-[150px] flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+      {hasError ? (
+        <div className="h-[150px] flex flex-col items-center justify-center text-muted-foreground">
+          <ImageOff className="h-8 w-8 mb-2" />
+          <span className="text-sm">Street View not available</span>
+        </div>
+      ) : (
+        <img
+          src={streetViewUrl}
+          alt="Street View of address"
+          className={`w-full h-[150px] object-cover ${isLoading ? 'hidden' : 'block'}`}
+          onLoad={(e) => {
+            setIsLoading(false);
+            const img = e.target as HTMLImageElement;
+            if (img.naturalWidth === 600 && img.naturalHeight === 300) {
+              setHasError(true);
+            }
+          }}
+          onError={() => {
+            setIsLoading(false);
+            setHasError(true);
+          }}
+          data-testid="streetview-image"
+        />
+      )}
+      <div className="px-2 py-1 text-[10px] text-muted-foreground text-right border-t">
+        Google Street View
+      </div>
+    </div>
+  );
+}
+
 export function AddressAutocomplete({
   value,
   onChange,
   placeholder = "Enter address...",
   className,
+  showStreetView = false,
   "data-testid": dataTestId,
 }: AddressAutocompleteProps) {
   const [inputValue, setInputValue] = useState(value);
@@ -78,6 +134,7 @@ export function AddressAutocomplete({
   const [isLoading, setIsLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isApiAvailable, setIsApiAvailable] = useState(false);
+  const [confirmedAddress, setConfirmedAddress] = useState(value);
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesService = useRef<google.maps.places.PlacesService | null>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
@@ -85,6 +142,9 @@ export function AddressAutocomplete({
 
   useEffect(() => {
     setInputValue(value);
+    if (value && value.length >= 10) {
+      setConfirmedAddress(value);
+    }
   }, [value]);
 
   useEffect(() => {
@@ -160,6 +220,7 @@ export function AddressAutocomplete({
     if (!placesService.current) {
       setInputValue(prediction.description);
       onChange(prediction.description);
+      setConfirmedAddress(prediction.description);
       setShowDropdown(false);
       setPredictions([]);
       return;
@@ -174,9 +235,11 @@ export function AddressAutocomplete({
         if (status === google.maps.places.PlacesServiceStatus.OK && place?.formatted_address) {
           setInputValue(place.formatted_address);
           onChange(place.formatted_address);
+          setConfirmedAddress(place.formatted_address);
         } else {
           setInputValue(prediction.description);
           onChange(prediction.description);
+          setConfirmedAddress(prediction.description);
         }
         setShowDropdown(false);
         setPredictions([]);
@@ -232,6 +295,10 @@ export function AddressAutocomplete({
             Powered by Google
           </div>
         </div>
+      )}
+
+      {showStreetView && confirmedAddress && (
+        <StreetViewPreview address={confirmedAddress} />
       )}
     </div>
   );
