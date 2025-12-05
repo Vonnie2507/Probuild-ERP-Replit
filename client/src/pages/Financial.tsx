@@ -23,8 +23,6 @@ import {
   Search,
   Filter,
   ChevronDown,
-  Eye,
-  EyeOff,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,8 +35,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  SelectGroup,
-  SelectLabel,
 } from "@/components/ui/select";
 import {
   Table,
@@ -294,8 +290,6 @@ export default function Financial() {
   const [searchQuery, setSearchQuery] = useState("");
   const [directionFilter, setDirectionFilter] = useState<string>("all");
   const [showConnectDialog, setShowConnectDialog] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [institutionSearch, setInstitutionSearch] = useState("");
   const isAdmin = user?.role === "admin";
 
   const form = useForm<z.infer<typeof connectionFormSchema>>({
@@ -307,6 +301,18 @@ export default function Financial() {
       lastName: "",
     },
   });
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (showConnectDialog) {
+      form.reset({
+        email: "",
+        mobile: "",
+        firstName: "",
+        lastName: "",
+      });
+    }
+  }, [showConnectDialog, form]);
 
   const { data: overview, isLoading: overviewLoading } = useQuery<FinancialOverview>({
     queryKey: ["/api/financial/overview"],
@@ -320,16 +326,6 @@ export default function Financial() {
     queryKey: ["/api/financial/connections"],
     enabled: isAdmin,
   });
-
-  const { data: institutions = [], isLoading: institutionsLoading } = useQuery<Institution[]>({
-    queryKey: ["/api/financial/institutions"],
-    enabled: isAdmin && showConnectDialog,
-  });
-
-  const filteredInstitutions = institutions.filter(inst => 
-    inst.name?.toLowerCase().includes(institutionSearch.toLowerCase()) ||
-    inst.shortName?.toLowerCase().includes(institutionSearch.toLowerCase())
-  ).slice(0, 20);
 
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery<BankTransaction[]>({
     queryKey: ["/api/financial/transactions", { search: searchQuery, direction: directionFilter !== "all" ? directionFilter : undefined }],
