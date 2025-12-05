@@ -96,8 +96,16 @@ export class BasiqService {
       email,
       businessName: businessName || "Probuild PVC",
       // Basiq requires both BusinessIdNo and BusinessIdNoType for business users
-      BusinessIdNo: abn || process.env.PROBUILD_ABN || "11111111111",
-      BusinessIdNoType: "ABN" // Australian Business Number
+      BusinessIdNo: abn || process.env.PROBUILD_ABN,
+      BusinessIdNoType: "ABN",
+      // Business address is required
+      BusinessAddress: {
+        addressLine1: process.env.PROBUILD_ADDRESS_LINE1 || "Perth",
+        suburb: process.env.PROBUILD_SUBURB || "Perth",
+        state: process.env.PROBUILD_STATE || "WA",
+        postcode: process.env.PROBUILD_POSTCODE || "6000",
+        country: "Australia"
+      }
     };
     if (mobile) {
       body.mobile = mobile;
