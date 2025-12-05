@@ -39,11 +39,11 @@ export class BasiqService {
     const response = await fetch(`${BASIQ_BASE_URL}/token`, {
       method: "POST",
       headers: {
-        "Authorization": `Basic ${Buffer.from(this.apiKey).toString('base64')}`,
-        "Content-Type": "application/json",
+        "Authorization": `Basic ${this.apiKey}`,
+        "Content-Type": "application/x-www-form-urlencoded",
         "basiq-version": "3.0"
       },
-      body: JSON.stringify({ scope: "SERVER_ACCESS" })
+      body: "scope=SERVER_ACCESS"
     });
 
     if (!response.ok) {
