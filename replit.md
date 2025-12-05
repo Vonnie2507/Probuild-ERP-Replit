@@ -76,3 +76,26 @@ The system employs a modern web architecture with a clear separation of concerns
 -   **Database:** Neon (PostgreSQL)
 -   **Payment Gateway:** Stripe
 -   **SMS Messaging:** Twilio
+-   **Open Banking:** Basiq CDR (Consumer Data Right) Integration for Westpac Business account connectivity
+
+## Banking Integration (Basiq CDR)
+The system integrates with Basiq's CDR Open Banking API for secure bank account access:
+
+**CDR Consent Flow:**
+-   Uses hosted Consent UI - no bank credentials collected by the application
+-   POST `/api/financial/connect-bank` creates CDR consent and returns connect URL
+-   User redirected to bank's secure login (Westpac) to authorize access
+-   GET `/api/financial/callback` handles redirect after consent completion
+-   POST `/api/basiq/webhook` receives transaction update notifications
+
+**Key Features:**
+-   Account balances and transaction sync via consent
+-   365-day consent validity with renewal support
+-   Business details: Probuild PVC (ABN: 29 688 327 479)
+-   Database tracks consent lifecycle via `basiqConsentId` on `bank_connections`
+
+**Frontend (client/src/pages/Financial.tsx):**
+-   Simple "Connect Bank Account" button - no form fields
+-   Displays connection status, consent info, and expiry dates
+-   Overview, Accounts, Transactions, and Connections tabs
+-   Admin-only bank connection management
