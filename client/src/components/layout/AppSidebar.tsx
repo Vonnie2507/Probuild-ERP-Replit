@@ -28,6 +28,7 @@ import {
   Upload,
   LayoutDashboard,
   Landmark,
+  Columns3,
 } from "lucide-react";
 import {
   Sidebar,
@@ -126,6 +127,7 @@ const navigationConfig: NavGroup[] = [
     items: [
       { title: "Dashboard Builder", url: "/dashboard-builder", icon: LayoutDashboard },
       { title: "Job Stage Config", url: "/job-stage-configuration", icon: GitBranch },
+      { title: "Kanban Columns", url: "/kanban-column-settings", icon: Columns3 },
     ],
   },
 ];

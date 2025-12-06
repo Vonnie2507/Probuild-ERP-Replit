@@ -41,6 +41,7 @@ import Unauthorized from "@/pages/Unauthorized";
 import DashboardBuilder from "@/pages/DashboardBuilder";
 import Financial from "@/pages/Financial";
 import JobStageConfiguration from "@/pages/JobStageConfiguration";
+import KanbanColumnSettings from "@/pages/KanbanColumnSettings";
 
 function MainLayout({ children }: { children: React.ReactNode }) {
   const style = {
@@ -417,6 +418,13 @@ function AuthenticatedRouter() {
         <ProtectedRoute path="/job-stage-configuration">
           <MainLayout>
             <JobStageConfiguration />
+          </MainLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/kanban-column-settings">
+        <ProtectedRoute path="/kanban-column-settings">
+          <MainLayout>
+            <KanbanColumnSettings />
           </MainLayout>
         </ProtectedRoute>
       </Route>
