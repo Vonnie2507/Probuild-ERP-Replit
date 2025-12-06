@@ -169,6 +169,34 @@ export async function sendSMS(
 // VOICE CALL FUNCTIONS
 // ============================================
 
+// Format phone number to E.164 format for Twilio
+function formatPhoneNumberE164(phoneNumber: string): string {
+  // Remove all non-digit characters except leading +
+  let cleaned = phoneNumber.replace(/[^\d+]/g, '');
+  
+  // If it starts with +, assume it's already in E.164
+  if (cleaned.startsWith('+')) {
+    return cleaned;
+  }
+  
+  // Australian number handling (default)
+  if (cleaned.startsWith('0')) {
+    // Remove leading 0 and add +61 for Australia
+    cleaned = '+61' + cleaned.substring(1);
+  } else if (cleaned.startsWith('61')) {
+    // Already has country code, just add +
+    cleaned = '+' + cleaned;
+  } else if (cleaned.length === 9) {
+    // 9 digits - likely Australian mobile without leading 0
+    cleaned = '+61' + cleaned;
+  } else {
+    // Default to adding + if it looks international
+    cleaned = '+' + cleaned;
+  }
+  
+  return cleaned;
+}
+
 export interface MakeCallOptions {
   to: string;
   webhookBaseUrl: string;
@@ -185,11 +213,14 @@ export async function makeOutboundCall(options: MakeCallOptions): Promise<{ sid:
     throw new Error('Twilio not configured');
   }
 
+  const formattedNumber = formatPhoneNumberE164(options.to);
+  console.log(`Making outbound call to ${options.to} -> formatted: ${formattedNumber}`);
+
   const statusCallbackUrl = `${options.webhookBaseUrl}/api/twilio/voice/status`;
   const voiceUrl = `${options.webhookBaseUrl}/api/twilio/voice/outbound`;
 
   const callParams: any = {
-    to: options.to,
+    to: formattedNumber,
     from: fromNumber,
     url: voiceUrl,
     statusCallback: statusCallbackUrl,
