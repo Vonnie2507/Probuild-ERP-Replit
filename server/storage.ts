@@ -68,6 +68,7 @@ import {
   type BankTransaction, type InsertBankTransaction,
   type JobPipeline, type InsertJobPipeline,
   type JobPipelineStage, type InsertJobPipelineStage,
+  type JobStageCompletion, jobStageCompletions,
   dashboardWidgets, roleDashboardLayouts, dashboardWidgetInstances,
 } from "@shared/schema";
 
@@ -552,6 +553,10 @@ export interface IStorage {
   updateJobPipelineStage(id: string, stage: Partial<InsertJobPipelineStage>): Promise<JobPipelineStage | undefined>;
   deleteJobPipelineStage(id: string): Promise<boolean>;
   reorderJobPipelineStages(pipelineId: string, stageIds: string[]): Promise<boolean>;
+
+  // Job Stage Completions
+  getJobStageCompletions(jobId: string): Promise<JobStageCompletion[]>;
+  toggleJobStageCompletion(jobId: string, stageId: string, userId?: string): Promise<{ completed: boolean }>;
 }
 
 export interface TransactionFilters {
@@ -3477,6 +3482,39 @@ export class DatabaseStorage implements IStorage {
         ));
     }
     return true;
+  }
+
+  // Job Stage Completions
+  async getJobStageCompletions(jobId: string): Promise<JobStageCompletion[]> {
+    return db.select().from(jobStageCompletions)
+      .where(eq(jobStageCompletions.jobId, jobId));
+  }
+
+  async toggleJobStageCompletion(jobId: string, stageId: string, userId?: string): Promise<{ completed: boolean }> {
+    // Check if this stage is already completed for this job
+    const [existing] = await db.select().from(jobStageCompletions)
+      .where(and(
+        eq(jobStageCompletions.jobId, jobId),
+        eq(jobStageCompletions.stageId, stageId)
+      ));
+
+    if (existing) {
+      // Remove the completion (toggle off)
+      await db.delete(jobStageCompletions)
+        .where(and(
+          eq(jobStageCompletions.jobId, jobId),
+          eq(jobStageCompletions.stageId, stageId)
+        ));
+      return { completed: false };
+    } else {
+      // Add the completion (toggle on)
+      await db.insert(jobStageCompletions).values({
+        jobId,
+        stageId,
+        completedBy: userId,
+      });
+      return { completed: true };
+    }
   }
 
   // ============================================

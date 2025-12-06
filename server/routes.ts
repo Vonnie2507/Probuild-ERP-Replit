@@ -5858,5 +5858,36 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // JOB STAGE COMPLETIONS
+  // ============================================
+
+  // Get stage completions for a job
+  app.get("/api/jobs/:jobId/stage-completions", async (req, res) => {
+    try {
+      const completions = await storage.getJobStageCompletions(req.params.jobId);
+      res.json(completions);
+    } catch (error) {
+      console.error("Error fetching job stage completions:", error);
+      res.status(500).json({ error: "Failed to fetch stage completions" });
+    }
+  });
+
+  // Toggle stage completion for a job
+  app.post("/api/jobs/:jobId/stage-completions/:stageId/toggle", async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const result = await storage.toggleJobStageCompletion(
+        req.params.jobId, 
+        req.params.stageId, 
+        userId
+      );
+      res.json(result);
+    } catch (error) {
+      console.error("Error toggling stage completion:", error);
+      res.status(500).json({ error: "Failed to toggle stage completion" });
+    }
+  });
+
   return httpServer;
 }
