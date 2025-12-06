@@ -2144,3 +2144,25 @@ export type JobPipelineStage = typeof jobPipelineStages.$inferSelect;
 
 export type InsertJobStageCompletion = z.infer<typeof insertJobStageCompletionSchema>;
 export type JobStageCompletion = typeof jobStageCompletions.$inferSelect;
+
+// Kanban Columns - configurable columns for job kanban board
+export const kanbanColumns = pgTable("kanban_columns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title", { length: 100 }).notNull(),
+  statuses: text("statuses").array().notNull(),
+  defaultStatus: varchar("default_status", { length: 50 }).notNull(),
+  color: varchar("color", { length: 100 }).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertKanbanColumnSchema = createInsertSchema(kanbanColumns).omit({ 
+  id: true, 
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertKanbanColumn = z.infer<typeof insertKanbanColumnSchema>;
+export type KanbanColumn = typeof kanbanColumns.$inferSelect;
