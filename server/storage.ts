@@ -160,6 +160,7 @@ export interface IStorage {
   getJobsByStatus(status: string): Promise<Job[]>;
   getJobsByInstaller(installerId: string): Promise<Job[]>;
   createJob(job: InsertJob): Promise<Job>;
+  createDirectJob(data: { clientId: string; jobType: "supply_only" | "supply_install"; siteAddress: string; notes?: string; totalAmount?: number }): Promise<{ lead: Lead; job: Job }>;
   updateJob(id: string, job: Partial<InsertJob>): Promise<Job | undefined>;
   getNextJobNumber(): Promise<string>;
   searchJobs(query: string): Promise<Job[]>;
@@ -1220,6 +1221,38 @@ export class DatabaseStorage implements IStorage {
   async deleteJob(id: string): Promise<boolean> {
     await db.delete(jobs).where(eq(jobs.id, id));
     return true;
+  }
+
+  async createDirectJob(data: { clientId: string; jobType: "supply_only" | "supply_install"; siteAddress: string; notes?: string; totalAmount?: number }): Promise<{ lead: Lead; job: Job }> {
+    const client = await this.getClient(data.clientId);
+    if (!client) {
+      throw new Error("Client not found");
+    }
+
+    const lead = await this.createLead({
+      clientId: data.clientId,
+      source: "direct_job",
+      stage: "won",
+      jobFulfillmentType: data.jobType,
+      siteAddress: data.siteAddress,
+      notes: data.notes || "Created via Direct Job",
+      expectedValue: data.totalAmount ? String(data.totalAmount) : undefined,
+    });
+
+    const job = await this.createJob({
+      clientId: data.clientId,
+      jobType: data.jobType,
+      siteAddress: data.siteAddress,
+      fenceStyle: "Standard",
+      notes: data.notes,
+      totalAmount: data.totalAmount ? String(data.totalAmount) : "0",
+      depositAmount: "0",
+      balanceDue: data.totalAmount ? String(data.totalAmount) : "0",
+      status: "accepted",
+      leadId: lead.id,
+    } as any);
+
+    return { lead, job };
   }
 
   // BOM

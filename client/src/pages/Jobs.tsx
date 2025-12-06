@@ -57,6 +57,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Job, Client, ProductionTask, User } from "@shared/schema";
+import { Plus } from "lucide-react";
+import { DialogTrigger } from "@/components/ui/dialog";
 
 type JobStatus = "in_progress" | "production" | "ready" | "scheduled" | "complete";
 
@@ -91,12 +93,20 @@ export default function Jobs() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isNewJobDialogOpen, setIsNewJobDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [formData, setFormData] = useState({
     status: "",
     notes: "",
     siteAddress: "",
+  });
+  const [newJobData, setNewJobData] = useState({
+    clientId: "",
+    jobType: "supply_install" as "supply_only" | "supply_install",
+    siteAddress: "",
+    notes: "",
+    totalAmount: "",
   });
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
@@ -150,6 +160,54 @@ export default function Jobs() {
       });
     },
   });
+
+  const createDirectJobMutation = useMutation({
+    mutationFn: async (data: { clientId: string; jobType: string; siteAddress: string; notes?: string; totalAmount?: string }) => {
+      return apiRequest("POST", "/api/jobs/create-direct", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      toast({
+        title: "Job Created",
+        description: "New job has been created successfully",
+      });
+      setIsNewJobDialogOpen(false);
+      setNewJobData({
+        clientId: "",
+        jobType: "supply_install",
+        siteAddress: "",
+        notes: "",
+        totalAmount: "",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create job",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreateDirectJob = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newJobData.clientId || !newJobData.siteAddress) {
+      toast({
+        title: "Error",
+        description: "Client and site address are required",
+        variant: "destructive",
+      });
+      return;
+    }
+    createDirectJobMutation.mutate({
+      clientId: newJobData.clientId,
+      jobType: newJobData.jobType,
+      siteAddress: newJobData.siteAddress,
+      notes: newJobData.notes || undefined,
+      totalAmount: newJobData.totalAmount || undefined,
+    });
+  };
 
   const handleEditJob = (job: Job) => {
     setEditingJob(job);
@@ -362,6 +420,14 @@ export default function Jobs() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button 
+              size="sm" 
+              onClick={() => setIsNewJobDialogOpen(true)}
+              data-testid="button-new-job-kanban"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Job
+            </Button>
             <ViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
             <Button 
               variant="outline" 
@@ -413,7 +479,15 @@ export default function Jobs() {
             />
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1">
+            <Button 
+              size="sm" 
+              onClick={() => setIsNewJobDialogOpen(true)}
+              data-testid="button-new-job"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Job
+            </Button>
+            <Button variant="outline" size="sm">
               <Filter className="h-4 w-4 mr-2" />
               Filter
             </Button>
@@ -806,6 +880,95 @@ export default function Jobs() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={isNewJobDialogOpen} onOpenChange={setIsNewJobDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Job</DialogTitle>
+            <DialogDescription>
+              Create a job directly without going through the leads flow. A lead will be created automatically for analytics.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateDirectJob} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-job-client">Client</Label>
+              <Select 
+                value={newJobData.clientId}
+                onValueChange={(value) => setNewJobData({ ...newJobData, clientId: value })}
+              >
+                <SelectTrigger data-testid="select-new-job-client">
+                  <SelectValue placeholder="Select a client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-job-type">Job Type</Label>
+              <Select 
+                value={newJobData.jobType}
+                onValueChange={(value) => setNewJobData({ ...newJobData, jobType: value as "supply_only" | "supply_install" })}
+              >
+                <SelectTrigger data-testid="select-new-job-type">
+                  <SelectValue placeholder="Select job type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="supply_install">Supply + Install</SelectItem>
+                  <SelectItem value="supply_only">Supply Only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-job-address">Site Address</Label>
+              <Input 
+                id="new-job-address" 
+                placeholder="Enter site address" 
+                value={newJobData.siteAddress}
+                onChange={(e) => setNewJobData({ ...newJobData, siteAddress: e.target.value })}
+                data-testid="input-new-job-address" 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-job-amount">Total Amount (optional)</Label>
+              <Input 
+                id="new-job-amount" 
+                type="number"
+                placeholder="0.00" 
+                value={newJobData.totalAmount}
+                onChange={(e) => setNewJobData({ ...newJobData, totalAmount: e.target.value })}
+                data-testid="input-new-job-amount" 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-job-notes">Notes (optional)</Label>
+              <Textarea
+                id="new-job-notes"
+                placeholder="Add job notes..."
+                value={newJobData.notes}
+                onChange={(e) => setNewJobData({ ...newJobData, notes: e.target.value })}
+                data-testid="textarea-new-job-notes"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setIsNewJobDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={createDirectJobMutation.isPending}
+                data-testid="button-submit-new-job"
+              >
+                {createDirectJobMutation.isPending ? "Creating..." : "Create Job"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

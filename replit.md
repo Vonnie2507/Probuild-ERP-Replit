@@ -37,6 +37,12 @@ The system employs a modern web architecture with a clear separation of concerns
 -   **Call Log & Transcription System:** Full call logging with direction (inbound/outbound/missed), duration tracking, notes, and collapsible detail panels. Supports creating tasks linked to specific calls. Prepared for future AI transcription integration.
 -   **Specialized Applications:** Features a dedicated Installer Mobile App and a Trade Client Portal for self-service.
 -   **Hierarchical Numbering:** Implements a strict hierarchical numbering system for Leads (`PVC-XXX`), Quotes (`PVC-XXX-Q#`), Jobs (`PVC-XXX-JOB`), and Invoices (`PVC-XXX-INV`) to ensure consistent tracking and data linkage.
+-   **Direct Job Creation:** Allows creating jobs directly from the Jobs module without going through the leads/quotes flow:
+    -   "New Job" button in Jobs page (both list and kanban views)
+    -   System automatically creates a hidden Lead with source="direct_job" and stage="won"
+    -   Hidden leads appear in analytics (lead counts, win rates, source reporting)
+    -   Can be filtered out using lead_source if only "normal" leads are needed
+    -   Job and Lead share the same base ID (PVC-XXX → PVC-XXX-JOB)
 -   **Role-Based Access Control:** Comprehensive RBAC implementation with:
     -   7 distinct user roles: admin, sales, scheduler, production_manager, warehouse, installer, trade_client
     -   Centralized permissions configuration in `client/src/lib/permissions.ts`

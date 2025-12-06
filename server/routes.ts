@@ -1490,6 +1490,30 @@ export async function registerRoutes(
     }
   });
 
+  // Create a job directly (without going through leads/quotes flow)
+  app.post("/api/jobs/create-direct", requireRoles("admin", "sales", "scheduler", "production_manager"), async (req, res) => {
+    try {
+      const { clientId, jobType, siteAddress, notes, totalAmount } = req.body;
+      
+      if (!clientId || !jobType || !siteAddress) {
+        return res.status(400).json({ error: "clientId, jobType, and siteAddress are required" });
+      }
+
+      const result = await storage.createDirectJob({
+        clientId,
+        jobType,
+        siteAddress,
+        notes,
+        totalAmount: totalAmount ? parseFloat(totalAmount) : undefined,
+      });
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Error creating direct job:", error);
+      res.status(500).json({ error: "Failed to create job" });
+    }
+  });
+
   app.patch("/api/jobs/:id", requireRoles("admin", "sales", "scheduler", "production_manager"), async (req, res) => {
     try {
       const job = await storage.updateJob(req.params.id, req.body);
