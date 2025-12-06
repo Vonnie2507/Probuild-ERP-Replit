@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { JobKanbanCard } from "./JobKanbanCard";
 import { cn } from "@/lib/utils";
-import type { Job, Client, User } from "@shared/schema";
+import type { Job, Client, User, KanbanColumn as DBKanbanColumn } from "@shared/schema";
 
 interface KanbanColumn {
   id: string;
@@ -15,7 +16,7 @@ interface KanbanColumn {
   color: string;
 }
 
-const KANBAN_COLUMNS: KanbanColumn[] = [
+const DEFAULT_KANBAN_COLUMNS: KanbanColumn[] = [
   {
     id: "accepted",
     title: "New Jobs",
@@ -60,6 +61,19 @@ const KANBAN_COLUMNS: KanbanColumn[] = [
   },
 ];
 
+function mapDbColumnsToKanban(dbColumns: DBKanbanColumn[]): KanbanColumn[] {
+  return dbColumns
+    .filter(col => col.isActive)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(col => ({
+      id: col.id.toString(),
+      title: col.title,
+      statuses: col.statuses as string[],
+      defaultStatus: col.defaultStatus,
+      color: col.color,
+    }));
+}
+
 interface JobKanbanBoardProps {
   jobs: Job[];
   clients: Client[];
@@ -81,6 +95,14 @@ export function JobKanbanBoard({
 }: JobKanbanBoardProps) {
   const [draggedJob, setDraggedJob] = useState<Job | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  
+  const { data: dbColumns } = useQuery<DBKanbanColumn[]>({
+    queryKey: ["/api/kanban-columns"],
+  });
+  
+  const kanbanColumns = dbColumns && dbColumns.length > 0 
+    ? mapDbColumnsToKanban(dbColumns) 
+    : DEFAULT_KANBAN_COLUMNS;
   
   const canDrag = !isUpdating;
 
@@ -121,7 +143,7 @@ export function JobKanbanBoard({
     setDragOverColumn(null);
     
     if (draggedJob && onJobStatusChange) {
-      const currentColumn = KANBAN_COLUMNS.find(col => 
+      const currentColumn = kanbanColumns.find(col => 
         col.statuses.includes(draggedJob.status)
       );
       
@@ -138,10 +160,13 @@ export function JobKanbanBoard({
     setDragOverColumn(null);
   };
 
+  const columnCount = kanbanColumns.length;
+  const minWidth = Math.max(1200, columnCount * 200);
+
   if (isLoading) {
     return (
-      <div className="grid grid-cols-5 gap-4 p-4 min-w-0">
-        {KANBAN_COLUMNS.map((column) => (
+      <div className="grid gap-4 p-4 min-w-0" style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}>
+        {kanbanColumns.map((column) => (
           <div key={column.id} className="min-w-0">
             <Card className="h-full">
               <CardHeader className="pb-2">
@@ -161,8 +186,8 @@ export function JobKanbanBoard({
 
   return (
     <div className="w-full p-4 overflow-x-auto" data-testid="kanban-board">
-      <div className="grid grid-cols-5 gap-4" style={{ minWidth: '1200px' }}>
-        {KANBAN_COLUMNS.map((column) => {
+      <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`, minWidth: `${minWidth}px` }}>
+        {kanbanColumns.map((column) => {
           const columnJobs = getJobsForColumn(column);
           const columnTotal = columnJobs.reduce(
             (sum, job) => sum + parseFloat(job.totalAmount || "0"), 
