@@ -49,7 +49,8 @@ export const quoteStatusEnum = pgEnum("quote_status", [
   "sent",
   "approved",
   "declined",
-  "expired"
+  "expired",
+  "rejected"
 ]);
 
 export const jobTypeEnum = pgEnum("job_type", ["supply_only", "supply_install"]);
@@ -280,6 +281,9 @@ export const leads = pgTable("leads", {
   assignedTo: varchar("assigned_to").references(() => users.id),
   followUpDate: timestamp("follow_up_date"),
   notes: text("notes"),
+  // Opportunity value tracking
+  opportunityValue: decimal("opportunity_value", { precision: 10, scale: 2 }),
+  primaryQuoteId: varchar("primary_quote_id"), // References quotes.id - no FK to avoid circular ref
   // Soil/site assessment data
   soilWarning: text("soil_warning"), // Short label: LIMESTONE, CLAY, ROCK, etc.
   soilInstallNotes: text("soil_install_notes"), // Full installation notes
@@ -378,6 +382,7 @@ export const quotes = pgTable("quotes", {
   depositRequired: decimal("deposit_required", { precision: 10, scale: 2 }),
   depositPercent: integer("deposit_percent").default(50),
   status: quoteStatusEnum("status").notNull().default("draft"),
+  isPrimary: boolean("is_primary").default(false),
   isTradeQuote: boolean("is_trade_quote").default(false),
   tradeDiscount: decimal("trade_discount", { precision: 5, scale: 2 }),
   validUntil: timestamp("valid_until"),
