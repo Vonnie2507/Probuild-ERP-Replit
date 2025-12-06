@@ -2166,3 +2166,24 @@ export const insertKanbanColumnSchema = createInsertSchema(kanbanColumns).omit({
 
 export type InsertKanbanColumn = z.infer<typeof insertKanbanColumnSchema>;
 export type KanbanColumn = typeof kanbanColumns.$inferSelect;
+
+// Job Statuses - configurable statuses that jobs can be in
+export const jobStatuses = pgTable("job_statuses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: varchar("key", { length: 50 }).notNull().unique(),
+  label: varchar("label", { length: 100 }).notNull(),
+  description: varchar("description", { length: 255 }),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertJobStatusSchema = createInsertSchema(jobStatuses).omit({ 
+  id: true, 
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertJobStatus = z.infer<typeof insertJobStatusSchema>;
+export type JobStatus = typeof jobStatuses.$inferSelect;

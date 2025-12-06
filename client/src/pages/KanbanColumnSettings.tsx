@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus,
   Pencil,
@@ -18,8 +18,9 @@ import {
   Columns3,
   ArrowUp,
   ArrowDown,
+  ListTodo,
 } from "lucide-react";
-import type { KanbanColumn } from "@shared/schema";
+import type { KanbanColumn, JobStatus } from "@shared/schema";
 
 const COLOR_OPTIONS = [
   { value: "bg-slate-100 dark:bg-slate-800", label: "Gray" },
@@ -34,30 +35,14 @@ const COLOR_OPTIONS = [
   { value: "bg-pink-50 dark:bg-pink-950", label: "Pink" },
 ];
 
-const JOB_STATUSES = [
-  { value: "accepted", label: "Accepted" },
-  { value: "awaiting_deposit", label: "Awaiting Deposit" },
-  { value: "deposit_paid", label: "Deposit Paid" },
-  { value: "ready_for_production", label: "Ready for Production" },
-  { value: "manufacturing_posts", label: "Manufacturing Posts" },
-  { value: "manufacturing_panels", label: "Manufacturing Panels" },
-  { value: "manufacturing_gates", label: "Manufacturing Gates" },
-  { value: "qa_check", label: "QA Check" },
-  { value: "ready_for_scheduling", label: "Ready for Scheduling" },
-  { value: "scheduled", label: "Scheduled" },
-  { value: "install_posts", label: "Install Posts" },
-  { value: "install_panels", label: "Install Panels" },
-  { value: "install_gates", label: "Install Gates" },
-  { value: "install_complete", label: "Install Complete" },
-  { value: "awaiting_final_payment", label: "Awaiting Final Payment" },
-  { value: "paid_in_full", label: "Paid in Full" },
-];
-
 export default function KanbanColumnSettings() {
   const { toast } = useToast();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("columns");
+  
+  // Column dialog state
+  const [isColumnDialogOpen, setIsColumnDialogOpen] = useState(false);
   const [editingColumn, setEditingColumn] = useState<KanbanColumn | null>(null);
-  const [formData, setFormData] = useState({
+  const [columnFormData, setColumnFormData] = useState({
     title: "",
     statuses: [] as string[],
     defaultStatus: "",
@@ -65,39 +50,55 @@ export default function KanbanColumnSettings() {
     isActive: true,
   });
 
-  const { data: columns = [], isLoading } = useQuery<KanbanColumn[]>({
+  // Status dialog state
+  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+  const [editingStatus, setEditingStatus] = useState<JobStatus | null>(null);
+  const [statusFormData, setStatusFormData] = useState({
+    key: "",
+    label: "",
+    description: "",
+    isActive: true,
+  });
+
+  // Fetch columns and statuses
+  const { data: columns = [], isLoading: columnsLoading } = useQuery<KanbanColumn[]>({
     queryKey: ["/api/kanban-columns"],
   });
 
-  const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
+  const { data: jobStatuses = [], isLoading: statusesLoading } = useQuery<JobStatus[]>({
+    queryKey: ["/api/job-statuses"],
+  });
+
+  // Column mutations
+  const createColumnMutation = useMutation({
+    mutationFn: async (data: typeof columnFormData) => {
       return apiRequest("POST", "/api/kanban-columns", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/kanban-columns"] });
       toast({ title: "Column created successfully" });
-      closeDialog();
+      closeColumnDialog();
     },
     onError: () => {
       toast({ title: "Failed to create column", variant: "destructive" });
     },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: typeof formData }) => {
+  const updateColumnMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof columnFormData }) => {
       return apiRequest("PATCH", `/api/kanban-columns/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/kanban-columns"] });
       toast({ title: "Column updated successfully" });
-      closeDialog();
+      closeColumnDialog();
     },
     onError: () => {
       toast({ title: "Failed to update column", variant: "destructive" });
     },
   });
 
-  const deleteMutation = useMutation({
+  const deleteColumnMutation = useMutation({
     mutationFn: async (id: string) => {
       return apiRequest("DELETE", `/api/kanban-columns/${id}`);
     },
@@ -110,7 +111,7 @@ export default function KanbanColumnSettings() {
     },
   });
 
-  const reorderMutation = useMutation({
+  const reorderColumnMutation = useMutation({
     mutationFn: async (columnIds: string[]) => {
       return apiRequest("POST", "/api/kanban-columns/reorder", { columnIds });
     },
@@ -122,53 +123,108 @@ export default function KanbanColumnSettings() {
     },
   });
 
-  const openCreateDialog = () => {
+  // Status mutations
+  const createStatusMutation = useMutation({
+    mutationFn: async (data: typeof statusFormData) => {
+      return apiRequest("POST", "/api/job-statuses", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/job-statuses"] });
+      toast({ title: "Status created successfully" });
+      closeStatusDialog();
+    },
+    onError: () => {
+      toast({ title: "Failed to create status", variant: "destructive" });
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof statusFormData }) => {
+      return apiRequest("PATCH", `/api/job-statuses/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/job-statuses"] });
+      toast({ title: "Status updated successfully" });
+      closeStatusDialog();
+    },
+    onError: () => {
+      toast({ title: "Failed to update status", variant: "destructive" });
+    },
+  });
+
+  const deleteStatusMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/job-statuses/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/job-statuses"] });
+      toast({ title: "Status deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete status", variant: "destructive" });
+    },
+  });
+
+  const reorderStatusMutation = useMutation({
+    mutationFn: async (statusIds: string[]) => {
+      return apiRequest("POST", "/api/job-statuses/reorder", { statusIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/job-statuses"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to reorder statuses", variant: "destructive" });
+    },
+  });
+
+  // Column dialog handlers
+  const openCreateColumnDialog = () => {
     setEditingColumn(null);
-    setFormData({
+    setColumnFormData({
       title: "",
       statuses: [],
       defaultStatus: "",
       color: "bg-slate-100 dark:bg-slate-800",
       isActive: true,
     });
-    setIsDialogOpen(true);
+    setIsColumnDialogOpen(true);
   };
 
-  const openEditDialog = (column: KanbanColumn) => {
+  const openEditColumnDialog = (column: KanbanColumn) => {
     setEditingColumn(column);
-    setFormData({
+    setColumnFormData({
       title: column.title,
       statuses: column.statuses || [],
       defaultStatus: column.defaultStatus,
       color: column.color,
       isActive: column.isActive,
     });
-    setIsDialogOpen(true);
+    setIsColumnDialogOpen(true);
   };
 
-  const closeDialog = () => {
-    setIsDialogOpen(false);
+  const closeColumnDialog = () => {
+    setIsColumnDialogOpen(false);
     setEditingColumn(null);
   };
 
-  const handleSubmit = () => {
-    if (!formData.title || formData.statuses.length === 0 || !formData.defaultStatus) {
+  const handleColumnSubmit = () => {
+    if (!columnFormData.title || columnFormData.statuses.length === 0 || !columnFormData.defaultStatus) {
       toast({ title: "Please fill in all required fields", variant: "destructive" });
       return;
     }
 
     if (editingColumn) {
-      updateMutation.mutate({ id: editingColumn.id, data: formData });
+      updateColumnMutation.mutate({ id: editingColumn.id, data: columnFormData });
     } else {
-      createMutation.mutate(formData);
+      createColumnMutation.mutate(columnFormData);
     }
   };
 
-  const handleStatusToggle = (status: string) => {
-    setFormData((prev) => {
-      const newStatuses = prev.statuses.includes(status)
-        ? prev.statuses.filter((s) => s !== status)
-        : [...prev.statuses, status];
+  const handleStatusToggle = (statusKey: string) => {
+    setColumnFormData((prev) => {
+      const newStatuses = prev.statuses.includes(statusKey)
+        ? prev.statuses.filter((s) => s !== statusKey)
+        : [...prev.statuses, statusKey];
       
       const newDefaultStatus = newStatuses.includes(prev.defaultStatus)
         ? prev.defaultStatus
@@ -187,8 +243,63 @@ export default function KanbanColumnSettings() {
     newColumns[index] = newColumns[newIndex];
     newColumns[newIndex] = temp;
 
-    reorderMutation.mutate(newColumns.map((c) => c.id));
+    reorderColumnMutation.mutate(newColumns.map((c) => c.id));
   };
+
+  // Status dialog handlers
+  const openCreateStatusDialog = () => {
+    setEditingStatus(null);
+    setStatusFormData({
+      key: "",
+      label: "",
+      description: "",
+      isActive: true,
+    });
+    setIsStatusDialogOpen(true);
+  };
+
+  const openEditStatusDialog = (status: JobStatus) => {
+    setEditingStatus(status);
+    setStatusFormData({
+      key: status.key,
+      label: status.label,
+      description: status.description || "",
+      isActive: status.isActive,
+    });
+    setIsStatusDialogOpen(true);
+  };
+
+  const closeStatusDialog = () => {
+    setIsStatusDialogOpen(false);
+    setEditingStatus(null);
+  };
+
+  const handleStatusSubmit = () => {
+    if (!statusFormData.key || !statusFormData.label) {
+      toast({ title: "Please fill in key and label", variant: "destructive" });
+      return;
+    }
+
+    if (editingStatus) {
+      updateStatusMutation.mutate({ id: editingStatus.id, data: statusFormData });
+    } else {
+      createStatusMutation.mutate(statusFormData);
+    }
+  };
+
+  const moveStatus = (index: number, direction: "up" | "down") => {
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= jobStatuses.length) return;
+
+    const newStatuses = [...jobStatuses];
+    const temp = newStatuses[index];
+    newStatuses[index] = newStatuses[newIndex];
+    newStatuses[newIndex] = temp;
+
+    reorderStatusMutation.mutate(newStatuses.map((s) => s.id));
+  };
+
+  const isLoading = columnsLoading || statusesLoading;
 
   if (isLoading) {
     return (
@@ -203,106 +314,214 @@ export default function KanbanColumnSettings() {
 
   return (
     <div className="p-6 space-y-6" data-testid="page-kanban-column-settings">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Columns3 className="h-6 w-6" />
-            Kanban Column Settings
-          </h1>
-          <p className="text-muted-foreground">
-            Configure the columns displayed on the Jobs kanban board
-          </p>
-        </div>
-        <Button onClick={openCreateDialog} data-testid="button-add-column">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Column
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Columns3 className="h-6 w-6" />
+          Kanban Settings
+        </h1>
+        <p className="text-muted-foreground">
+          Configure kanban columns and job statuses
+        </p>
       </div>
 
-      <div className="space-y-3">
-        {columns.map((column, index) => (
-          <Card key={column.id} data-testid={`card-column-${column.id}`}>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-4">
-                <div className="flex flex-col gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    disabled={index === 0}
-                    onClick={() => moveColumn(index, "up")}
-                    data-testid={`button-move-up-${column.id}`}
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    disabled={index === columns.length - 1}
-                    onClick={() => moveColumn(index, "down")}
-                    data-testid={`button-move-down-${column.id}`}
-                  >
-                    <ArrowDown className="h-4 w-4" />
-                  </Button>
-                </div>
-                <GripVertical className="h-5 w-5 text-muted-foreground" />
-                <div
-                  className={`w-4 h-12 rounded ${column.color}`}
-                  title="Column color"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium">{column.title}</h3>
-                    {!column.isActive && (
-                      <Badge variant="secondary" className="text-xs">
-                        Inactive
-                      </Badge>
-                    )}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="columns" className="flex items-center gap-2">
+            <Columns3 className="h-4 w-4" />
+            Columns
+          </TabsTrigger>
+          <TabsTrigger value="statuses" className="flex items-center gap-2">
+            <ListTodo className="h-4 w-4" />
+            Job Statuses
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="columns" className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={openCreateColumnDialog} data-testid="button-add-column">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Column
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {columns.map((column, index) => (
+              <Card key={column.id} data-testid={`card-column-${column.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        disabled={index === 0}
+                        onClick={() => moveColumn(index, "up")}
+                        data-testid={`button-move-up-${column.id}`}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        disabled={index === columns.length - 1}
+                        onClick={() => moveColumn(index, "down")}
+                        data-testid={`button-move-down-${column.id}`}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <GripVertical className="h-5 w-5 text-muted-foreground" />
+                    <div
+                      className={`w-4 h-12 rounded ${column.color}`}
+                      title="Column color"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium">{column.title}</h3>
+                        {!column.isActive && (
+                          <Badge variant="secondary" className="text-xs">
+                            Inactive
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {(column.statuses || []).length} status(es) • Default: {column.defaultStatus}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditColumnDialog(column)}
+                        data-testid={`button-edit-column-${column.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm("Are you sure you want to delete this column?")) {
+                            deleteColumnMutation.mutate(column.id);
+                          }
+                        }}
+                        data-testid={`button-delete-column-${column.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {(column.statuses || []).length} status(es) • Default: {column.defaultStatus}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openEditDialog(column)}
-                    data-testid={`button-edit-column-${column.id}`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      if (confirm("Are you sure you want to delete this column?")) {
-                        deleteMutation.mutate(column.id);
-                      }
-                    }}
-                    data-testid={`button-delete-column-${column.id}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                </CardContent>
+              </Card>
+            ))}
 
-        {columns.length === 0 && (
-          <Card>
-            <CardContent className="p-8 text-center text-muted-foreground">
-              <Columns3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No kanban columns configured yet.</p>
-              <p className="text-sm">Click "Add Column" to create your first column.</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            {columns.length === 0 && (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  <Columns3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No kanban columns configured yet.</p>
+                  <p className="text-sm">Click "Add Column" to create your first column.</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <TabsContent value="statuses" className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={openCreateStatusDialog} data-testid="button-add-status">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Status
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {jobStatuses.map((status, index) => (
+              <Card key={status.id} data-testid={`card-status-${status.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        disabled={index === 0}
+                        onClick={() => moveStatus(index, "up")}
+                        data-testid={`button-move-up-status-${status.id}`}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        disabled={index === jobStatuses.length - 1}
+                        onClick={() => moveStatus(index, "down")}
+                        data-testid={`button-move-down-status-${status.id}`}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <GripVertical className="h-5 w-5 text-muted-foreground" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium">{status.label}</h3>
+                        <Badge variant="outline" className="text-xs font-mono">
+                          {status.key}
+                        </Badge>
+                        {!status.isActive && (
+                          <Badge variant="secondary" className="text-xs">
+                            Inactive
+                          </Badge>
+                        )}
+                      </div>
+                      {status.description && (
+                        <p className="text-sm text-muted-foreground">{status.description}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditStatusDialog(status)}
+                        data-testid={`button-edit-status-${status.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm("Are you sure you want to delete this status? This may affect existing jobs.")) {
+                            deleteStatusMutation.mutate(status.id);
+                          }
+                        }}
+                        data-testid={`button-delete-status-${status.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {jobStatuses.length === 0 && (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  <ListTodo className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No job statuses configured yet.</p>
+                  <p className="text-sm">Click "Add Status" to create your first status.</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Column Dialog */}
+      <Dialog open={isColumnDialogOpen} onOpenChange={setIsColumnDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
@@ -314,8 +533,8 @@ export default function KanbanColumnSettings() {
               <Label htmlFor="title">Column Title</Label>
               <Input
                 id="title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                value={columnFormData.title}
+                onChange={(e) => setColumnFormData({ ...columnFormData, title: e.target.value })}
                 placeholder="e.g., New Jobs, Pipeline, Production"
                 data-testid="input-column-title"
               />
@@ -329,11 +548,11 @@ export default function KanbanColumnSettings() {
                     key={color.value}
                     type="button"
                     className={`w-8 h-8 rounded border-2 ${color.value} ${
-                      formData.color === color.value
+                      columnFormData.color === color.value
                         ? "border-primary ring-2 ring-primary ring-offset-2"
                         : "border-transparent"
                     }`}
-                    onClick={() => setFormData({ ...formData, color: color.value })}
+                    onClick={() => setColumnFormData({ ...columnFormData, color: color.value })}
                     title={color.label}
                     data-testid={`button-color-${color.label.toLowerCase()}`}
                   />
@@ -347,17 +566,17 @@ export default function KanbanColumnSettings() {
                 Select which job statuses should appear in this column
               </p>
               <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border rounded p-2">
-                {JOB_STATUSES.map((status) => (
+                {jobStatuses.map((status) => (
                   <label
-                    key={status.value}
+                    key={status.key}
                     className="flex items-center gap-2 cursor-pointer"
                   >
                     <input
                       type="checkbox"
-                      checked={formData.statuses.includes(status.value)}
-                      onChange={() => handleStatusToggle(status.value)}
+                      checked={columnFormData.statuses.includes(status.key)}
+                      onChange={() => handleStatusToggle(status.key)}
                       className="rounded"
-                      data-testid={`checkbox-status-${status.value}`}
+                      data-testid={`checkbox-status-${status.key}`}
                     />
                     <span className="text-sm">{status.label}</span>
                   </label>
@@ -365,19 +584,19 @@ export default function KanbanColumnSettings() {
               </div>
             </div>
 
-            {formData.statuses.length > 0 && (
+            {columnFormData.statuses.length > 0 && (
               <div className="space-y-2">
                 <Label htmlFor="defaultStatus">Default Status (for new jobs dropped here)</Label>
                 <select
                   id="defaultStatus"
-                  value={formData.defaultStatus}
-                  onChange={(e) => setFormData({ ...formData, defaultStatus: e.target.value })}
+                  value={columnFormData.defaultStatus}
+                  onChange={(e) => setColumnFormData({ ...columnFormData, defaultStatus: e.target.value })}
                   className="w-full border rounded px-3 py-2"
                   data-testid="select-default-status"
                 >
-                  {formData.statuses.map((status) => (
-                    <option key={status} value={status}>
-                      {JOB_STATUSES.find((s) => s.value === status)?.label || status}
+                  {columnFormData.statuses.map((statusKey) => (
+                    <option key={statusKey} value={statusKey}>
+                      {jobStatuses.find((s) => s.key === statusKey)?.label || statusKey}
                     </option>
                   ))}
                 </select>
@@ -387,23 +606,94 @@ export default function KanbanColumnSettings() {
             <div className="flex items-center gap-2">
               <Switch
                 id="isActive"
-                checked={formData.isActive}
-                onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+                checked={columnFormData.isActive}
+                onCheckedChange={(checked) => setColumnFormData({ ...columnFormData, isActive: checked })}
                 data-testid="switch-is-active"
               />
               <Label htmlFor="isActive">Active</Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>
+            <Button variant="outline" onClick={closeColumnDialog}>
               Cancel
             </Button>
             <Button
-              onClick={handleSubmit}
-              disabled={createMutation.isPending || updateMutation.isPending}
+              onClick={handleColumnSubmit}
+              disabled={createColumnMutation.isPending || updateColumnMutation.isPending}
               data-testid="button-save-column"
             >
               {editingColumn ? "Update" : "Create"} Column
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Status Dialog */}
+      <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingStatus ? "Edit Status" : "Add New Status"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="statusKey">Status Key</Label>
+              <Input
+                id="statusKey"
+                value={statusFormData.key}
+                onChange={(e) => setStatusFormData({ ...statusFormData, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+                placeholder="e.g., awaiting_approval"
+                disabled={!!editingStatus}
+                data-testid="input-status-key"
+              />
+              <p className="text-xs text-muted-foreground">
+                Unique identifier (lowercase, underscores). Cannot be changed after creation.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="statusLabel">Display Label</Label>
+              <Input
+                id="statusLabel"
+                value={statusFormData.label}
+                onChange={(e) => setStatusFormData({ ...statusFormData, label: e.target.value })}
+                placeholder="e.g., Awaiting Approval"
+                data-testid="input-status-label"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="statusDescription">Description (optional)</Label>
+              <Input
+                id="statusDescription"
+                value={statusFormData.description}
+                onChange={(e) => setStatusFormData({ ...statusFormData, description: e.target.value })}
+                placeholder="Brief description of this status"
+                data-testid="input-status-description"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Switch
+                id="statusIsActive"
+                checked={statusFormData.isActive}
+                onCheckedChange={(checked) => setStatusFormData({ ...statusFormData, isActive: checked })}
+                data-testid="switch-status-is-active"
+              />
+              <Label htmlFor="statusIsActive">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeStatusDialog}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleStatusSubmit}
+              disabled={createStatusMutation.isPending || updateStatusMutation.isPending}
+              data-testid="button-save-status"
+            >
+              {editingStatus ? "Update" : "Create"} Status
             </Button>
           </DialogFooter>
         </DialogContent>

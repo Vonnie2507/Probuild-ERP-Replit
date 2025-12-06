@@ -70,6 +70,7 @@ import {
   type JobPipelineStage, type InsertJobPipelineStage,
   type JobStageCompletion, jobStageCompletions,
   type KanbanColumn, type InsertKanbanColumn, kanbanColumns,
+  type JobStatus, type InsertJobStatus, jobStatuses,
   dashboardWidgets, roleDashboardLayouts, dashboardWidgetInstances,
 } from "@shared/schema";
 
@@ -566,6 +567,14 @@ export interface IStorage {
   updateKanbanColumn(id: string, column: Partial<InsertKanbanColumn>): Promise<KanbanColumn | undefined>;
   deleteKanbanColumn(id: string): Promise<boolean>;
   reorderKanbanColumns(columnIds: string[]): Promise<boolean>;
+
+  // Job Statuses
+  getJobStatuses(): Promise<JobStatus[]>;
+  getJobStatus(id: string): Promise<JobStatus | undefined>;
+  createJobStatus(status: InsertJobStatus): Promise<JobStatus>;
+  updateJobStatus(id: string, status: Partial<InsertJobStatus>): Promise<JobStatus | undefined>;
+  deleteJobStatus(id: string): Promise<boolean>;
+  reorderJobStatuses(statusIds: string[]): Promise<boolean>;
 }
 
 export interface TransactionFilters {
@@ -3792,6 +3801,51 @@ export class DatabaseStorage implements IStorage {
       await db.update(kanbanColumns)
         .set({ sortOrder: i, updatedAt: new Date() })
         .where(eq(kanbanColumns.id, columnIds[i]));
+    }
+    return true;
+  }
+
+  // Job Statuses
+  async getJobStatuses(): Promise<JobStatus[]> {
+    return db.select().from(jobStatuses)
+      .where(eq(jobStatuses.isActive, true))
+      .orderBy(jobStatuses.sortOrder);
+  }
+
+  async getJobStatus(id: string): Promise<JobStatus | undefined> {
+    const [status] = await db.select().from(jobStatuses).where(eq(jobStatuses.id, id));
+    return status;
+  }
+
+  async createJobStatus(status: InsertJobStatus): Promise<JobStatus> {
+    const maxOrder = await db.select({ max: sql<number>`COALESCE(MAX(sort_order), -1)` })
+      .from(jobStatuses);
+    const sortOrder = (maxOrder[0]?.max ?? -1) + 1;
+    
+    const [newStatus] = await db.insert(jobStatuses)
+      .values({ ...status, sortOrder })
+      .returning();
+    return newStatus;
+  }
+
+  async updateJobStatus(id: string, status: Partial<InsertJobStatus>): Promise<JobStatus | undefined> {
+    const [updated] = await db.update(jobStatuses)
+      .set({ ...status, updatedAt: new Date() })
+      .where(eq(jobStatuses.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteJobStatus(id: string): Promise<boolean> {
+    const result = await db.delete(jobStatuses).where(eq(jobStatuses.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async reorderJobStatuses(statusIds: string[]): Promise<boolean> {
+    for (let i = 0; i < statusIds.length; i++) {
+      await db.update(jobStatuses)
+        .set({ sortOrder: i, updatedAt: new Date() })
+        .where(eq(jobStatuses.id, statusIds[i]));
     }
     return true;
   }

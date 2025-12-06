@@ -5988,5 +5988,102 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // JOB STATUSES
+  // ============================================
+
+  // Get all job statuses
+  app.get("/api/job-statuses", async (req, res) => {
+    try {
+      const statuses = await storage.getJobStatuses();
+      res.json(statuses);
+    } catch (error) {
+      console.error("Error fetching job statuses:", error);
+      res.status(500).json({ error: "Failed to fetch job statuses" });
+    }
+  });
+
+  // Get single job status
+  app.get("/api/job-statuses/:id", async (req, res) => {
+    try {
+      const status = await storage.getJobStatus(req.params.id);
+      if (!status) {
+        return res.status(404).json({ error: "Job status not found" });
+      }
+      res.json(status);
+    } catch (error) {
+      console.error("Error fetching job status:", error);
+      res.status(500).json({ error: "Failed to fetch job status" });
+    }
+  });
+
+  // Create job status
+  app.post("/api/job-statuses", requireRoles("admin"), async (req, res) => {
+    try {
+      const { key, label, description, isActive } = req.body;
+      if (!key || !label) {
+        return res.status(400).json({ error: "Missing required fields: key and label" });
+      }
+      const status = await storage.createJobStatus({
+        key,
+        label,
+        description,
+        isActive: isActive ?? true
+      });
+      res.json(status);
+    } catch (error) {
+      console.error("Error creating job status:", error);
+      res.status(500).json({ error: "Failed to create job status" });
+    }
+  });
+
+  // Update job status
+  app.patch("/api/job-statuses/:id", requireRoles("admin"), async (req, res) => {
+    try {
+      const { key, label, description, isActive, sortOrder } = req.body;
+      const status = await storage.updateJobStatus(req.params.id, {
+        key,
+        label,
+        description,
+        isActive,
+        sortOrder
+      });
+      if (!status) {
+        return res.status(404).json({ error: "Job status not found" });
+      }
+      res.json(status);
+    } catch (error) {
+      console.error("Error updating job status:", error);
+      res.status(500).json({ error: "Failed to update job status" });
+    }
+  });
+
+  // Delete job status
+  app.delete("/api/job-statuses/:id", requireRoles("admin"), async (req, res) => {
+    try {
+      await storage.deleteJobStatus(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting job status:", error);
+      res.status(500).json({ error: "Failed to delete job status" });
+    }
+  });
+
+  // Reorder job statuses
+  app.post("/api/job-statuses/reorder", requireRoles("admin"), async (req, res) => {
+    try {
+      const { statusIds } = req.body;
+      if (!Array.isArray(statusIds)) {
+        return res.status(400).json({ error: "statusIds must be an array" });
+      }
+      await storage.reorderJobStatuses(statusIds);
+      const statuses = await storage.getJobStatuses();
+      res.json(statuses);
+    } catch (error) {
+      console.error("Error reordering job statuses:", error);
+      res.status(500).json({ error: "Failed to reorder job statuses" });
+    }
+  });
+
   return httpServer;
 }
