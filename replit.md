@@ -53,6 +53,13 @@ The system employs a modern web architecture with a clear separation of concerns
     -   Role-specific route access: admin (full), sales (leads/quotes/clients), scheduler (jobs/schedule), production_manager (jobs/production/inventory), warehouse (production/inventory), installer (installer app), trade_client (trade portal only)
 -   **Live Document System:** Manages dynamic job setup and handover documents, with template support and lead-level access.
 -   **Analytics & Automation:** Incorporates Quote Analytics Dashboard and configurable Automation Campaigns for SMS, triggered by various business events.
+-   **Opportunity Value & Primary Quote System:** Prevents forecasting inflation from multiple quotes:
+    -   Each lead has opportunity_value (set from primary quote) and primary_quote_id
+    -   Each quote has is_primary flag (only one per lead can be primary)
+    -   Setting a new primary quote updates the lead's opportunity_value automatically
+    -   Pipeline Forecast uses opportunity_value from active leads (not sum of all quotes)
+    -   Quote acceptance: sets quote as primary, marks lead as won, rejects other quotes, creates job
+    -   Quote Analytics displays: Total Quote Value (all quotes for activity metrics) and Pipeline Forecast (opportunity_value for accurate forecasting)
 -   **Internal Management:** Features an "Organisation Hub" for managing departments, workflows, policies, resources, and a knowledge base.
 -   **P&L Calculator:** Provides a staff-only comprehensive job costing and profit/loss analysis tool.
 -   **Job Stage Configuration:** Admin-only feature for managing job pipelines and stages:

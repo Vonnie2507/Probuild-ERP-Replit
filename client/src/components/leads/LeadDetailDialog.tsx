@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { 
   Phone, Mail, MapPin, FileText, Edit, Plus, Clock, Calendar, 
   CheckCircle2, CircleDashed, MessageSquare, PhoneCall, Send,
-  ChevronRight, ClipboardList, AlertCircle, User, PhoneIncoming, PhoneOutgoing, PhoneMissed
+  ChevronRight, ClipboardList, AlertCircle, User, PhoneIncoming, PhoneOutgoing, PhoneMissed, Star
 } from "lucide-react";
 import {
   Dialog,
@@ -188,12 +188,27 @@ export function LeadDetailDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      toast({ title: "Job created successfully!" });
+      toast({ title: "Quote accepted and job created!" });
       onOpenChange(false);
     },
     onError: (error) => {
       console.error("Error converting to job:", error);
       toast({ title: "Failed to create job", variant: "destructive" });
+    },
+  });
+
+  const setPrimaryQuoteMutation = useMutation({
+    mutationFn: async (quoteId: string) => {
+      return apiRequest("POST", `/api/quotes/${quoteId}/set-primary`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      toast({ title: "Quote set as primary. Opportunity value updated." });
+    },
+    onError: (error) => {
+      console.error("Error setting primary quote:", error);
+      toast({ title: "Failed to set primary quote", variant: "destructive" });
     },
   });
 
@@ -532,7 +547,7 @@ export function LeadDetailDialog({
                   {quotes.map((quote) => (
                     <Card
                       key={quote.id}
-                      className="hover-elevate"
+                      className={`hover-elevate ${(quote as any).isPrimary ? "border-green-500 border-2" : ""}`}
                       data-testid={`quote-item-${quote.id}`}
                     >
                       <CardContent className="p-4">
@@ -541,23 +556,48 @@ export function LeadDetailDialog({
                             className="cursor-pointer flex-1"
                             onClick={() => onViewQuote(quote)}
                           >
-                            <div className="font-medium">{quote.quoteNumber}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{quote.quoteNumber}</span>
+                              {(quote as any).isPrimary && (
+                                <Badge variant="default" className="bg-green-600 text-xs">
+                                  <Star className="h-3 w-3 mr-1" />
+                                  Primary
+                                </Badge>
+                              )}
+                            </div>
                             <div className="text-sm text-muted-foreground">
                               {formatCurrency(quote.totalAmount)}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
                             <Badge
                               variant={
                                 quote.status === "approved"
                                   ? "default"
                                   : quote.status === "sent"
                                   ? "secondary"
+                                  : quote.status === "rejected"
+                                  ? "destructive"
                                   : "outline"
                               }
                             >
                               {quote.status}
                             </Badge>
+                            {quote.status !== "approved" && quote.status !== "rejected" && !(quote as any).isPrimary && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPrimaryQuoteMutation.mutate(quote.id);
+                                }}
+                                disabled={setPrimaryQuoteMutation.isPending}
+                                data-testid={`button-set-primary-${quote.id}`}
+                              >
+                                <Star className="h-3 w-3 mr-1" />
+                                Set Primary
+                              </Button>
+                            )}
                             {quote.status === "draft" && (
                               <Button
                                 size="sm"
@@ -591,7 +631,7 @@ export function LeadDetailDialog({
                                 data-testid={`button-convert-to-job-${quote.id}`}
                               >
                                 <ClipboardList className="h-3 w-3 mr-1" />
-                                Convert to Job
+                                Accept Quote
                               </Button>
                             )}
                             <ChevronRight 

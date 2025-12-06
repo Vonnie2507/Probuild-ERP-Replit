@@ -581,6 +581,8 @@ export interface QuoteAnalytics {
   quotesByStatus: { status: string; count: number }[];
   quotesByCreator: { userId: string; userName: string; total: number; approved: number; declined: number }[];
   recentQuotes: Quote[];
+  pipelineValue: number;
+  wonValue: number;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1094,6 +1096,101 @@ export class DatabaseStorage implements IStorage {
         ilike(quotes.siteAddress, `%${query}%`)
       )
     );
+  }
+
+  async setPrimaryQuote(quoteId: string): Promise<{ quote: Quote; lead: Lead }> {
+    const quote = await this.getQuote(quoteId);
+    if (!quote) {
+      throw new Error("Quote not found");
+    }
+    if (!quote.leadId) {
+      throw new Error("Quote must be associated with a lead to be set as primary");
+    }
+
+    await db.update(quotes)
+      .set({ isPrimary: false } as any)
+      .where(eq(quotes.leadId, quote.leadId));
+
+    const [updatedQuote] = await db.update(quotes)
+      .set({ isPrimary: true } as any)
+      .where(eq(quotes.id, quoteId))
+      .returning();
+
+    // Safely parse opportunity value to ensure numeric consistency
+    const opportunityValue = quote.totalAmount ? String(parseFloat(quote.totalAmount) || 0) : "0";
+
+    const [updatedLead] = await db.update(leads)
+      .set({
+        primaryQuoteId: quoteId,
+        opportunityValue: opportunityValue,
+        updatedAt: new Date(),
+      } as any)
+      .where(eq(leads.id, quote.leadId))
+      .returning();
+
+    return { quote: updatedQuote, lead: updatedLead };
+  }
+
+  async acceptQuote(quoteId: string): Promise<{ quote: Quote; lead: Lead; job: Job }> {
+    const quote = await this.getQuote(quoteId);
+    if (!quote) {
+      throw new Error("Quote not found");
+    }
+    if (!quote.leadId) {
+      throw new Error("Quote must be associated with a lead to be accepted");
+    }
+
+    const lead = await this.getLead(quote.leadId);
+    if (!lead) {
+      throw new Error("Lead not found");
+    }
+
+    await db.update(quotes)
+      .set({ isPrimary: false, status: "rejected" } as any)
+      .where(and(
+        eq(quotes.leadId, quote.leadId),
+        ne(quotes.id, quoteId)
+      ));
+
+    const [updatedQuote] = await db.update(quotes)
+      .set({ 
+        isPrimary: true, 
+        status: "approved",
+        approvedAt: new Date()
+      } as any)
+      .where(eq(quotes.id, quoteId))
+      .returning();
+
+    // Safely parse values to prevent NaN
+    const totalAmount = parseFloat(quote.totalAmount) || 0;
+    const depositRequired = parseFloat(quote.depositRequired || "0") || 0;
+    const opportunityValue = String(totalAmount);
+    const balanceDue = String(totalAmount - depositRequired);
+
+    const [updatedLead] = await db.update(leads)
+      .set({
+        primaryQuoteId: quoteId,
+        opportunityValue: opportunityValue,
+        stage: "won",
+        updatedAt: new Date(),
+      } as any)
+      .where(eq(leads.id, quote.leadId))
+      .returning();
+
+    // Create job with awaiting_deposit status to align with existing workflow
+    const job = await this.createJob({
+      clientId: quote.clientId,
+      quoteId: quoteId,
+      jobType: lead.jobFulfillmentType || "supply_install",
+      siteAddress: quote.siteAddress || lead.siteAddress || "",
+      fenceStyle: lead.fenceStyle || "Standard",
+      totalAmount: String(totalAmount),
+      depositAmount: String(depositRequired),
+      balanceDue: balanceDue,
+      status: "awaiting_deposit",
+    });
+
+    return { quote: updatedQuote, lead: updatedLead, job };
   }
 
   async getNextQuoteNumber(): Promise<string> {
@@ -1892,6 +1989,26 @@ export class DatabaseStorage implements IStorage {
       declined: stats.declined,
     }));
 
+    // Calculate pipeline value from leads' opportunity_value (for forecasting)
+    // Pipeline = leads that are not won/lost (active opportunities only)
+    const allLeads = await db.select().from(leads);
+    const activeLeadStages = ['new', 'contacted', 'needs_quote', 'quote_sent', 'follow_up'];
+    // Exclude lost leads from pipeline - only active leads with opportunity value
+    const pipelineValue = allLeads
+      .filter(l => activeLeadStages.includes(l.stage))
+      .reduce((sum, l) => {
+        const value = parseFloat((l as any).opportunityValue) || 0;
+        return sum + value;
+      }, 0);
+    
+    // Won value = opportunity_value of leads that are won (for actual converted revenue)
+    const wonValue = allLeads
+      .filter(l => l.stage === 'won')
+      .reduce((sum, l) => {
+        const value = parseFloat((l as any).opportunityValue) || 0;
+        return sum + value;
+      }, 0);
+
     return {
       totalQuotes,
       sentQuotes,
@@ -1906,6 +2023,8 @@ export class DatabaseStorage implements IStorage {
       quotesByStatus: statusCounts,
       quotesByCreator,
       recentQuotes: allQuotes.slice(0, 10),
+      pipelineValue,
+      wonValue,
     };
   }
 

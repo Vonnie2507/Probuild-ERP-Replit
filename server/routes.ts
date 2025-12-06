@@ -1370,7 +1370,18 @@ export async function registerRoutes(
     }
   });
 
-  // Accept quote and create job
+  // Set quote as primary (updates lead opportunity_value)
+  app.post("/api/quotes/:id/set-primary", requireRoles("admin", "sales"), async (req, res) => {
+    try {
+      const result = await storage.setPrimaryQuote(req.params.id);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error setting primary quote:", error);
+      res.status(400).json({ error: error.message || "Failed to set primary quote" });
+    }
+  });
+
+  // Accept quote and create job (also sets as primary and rejects other quotes)
   app.post("/api/quotes/:id/accept", requireRoles("admin", "sales"), async (req, res) => {
     try {
       const quote = await storage.getQuote(req.params.id);
@@ -1378,30 +1389,12 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Quote not found" });
       }
 
-      // Update quote status
-      await storage.updateQuote(req.params.id, {
-        status: "approved",
-        approvedAt: new Date(),
-      } as any);
-
-      // Get next job number and create job
-      const jobNumber = await storage.getNextJobNumber();
-      const jobType = req.body.jobType || "supply_install";
-      const jobData = {
-        jobNumber,
-        clientId: quote.clientId,
-        quoteId: quote.id,
-        jobType: jobType,
-        siteAddress: quote.siteAddress || "",
-        status: "awaiting_deposit" as const,
-        fenceStyle: req.body.fenceStyle,
-        totalLength: quote.totalLength,
-        fenceHeight: quote.fenceHeight,
-        totalAmount: quote.totalAmount,
-        depositAmount: quote.depositRequired,
-      };
-
-      const job = await storage.createJob(jobData);
+      // Use the new acceptQuote method which handles:
+      // - Setting this quote as primary
+      // - Updating lead stage to "won" and opportunity_value
+      // - Rejecting all other quotes on this lead
+      // - Creating the job
+      const { quote: updatedQuote, lead, job } = await storage.acceptQuote(req.params.id);
 
       // Create deposit payment record
       if (quote.depositRequired) {
@@ -1416,6 +1409,7 @@ export async function registerRoutes(
       }
 
       // Auto-create Job Setup Document for supply+install jobs
+      const jobType = job.jobType || "supply_install";
       if (jobType === "supply_install") {
         try {
           const setupDocument = await storage.createJobSetupDocument({
@@ -1439,10 +1433,10 @@ export async function registerRoutes(
         }
       }
 
-      res.status(201).json(job);
-    } catch (error) {
+      res.status(201).json({ quote: updatedQuote, lead, job });
+    } catch (error: any) {
       console.error("Error accepting quote:", error);
-      res.status(500).json({ error: "Failed to accept quote" });
+      res.status(500).json({ error: error.message || "Failed to accept quote" });
     }
   });
 

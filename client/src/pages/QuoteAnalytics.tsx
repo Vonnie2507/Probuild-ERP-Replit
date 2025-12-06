@@ -41,6 +41,8 @@ interface QuoteAnalytics {
   quotesByStatus: { status: string; count: number }[];
   quotesByCreator: { userId: string; userName: string; total: number; approved: number; declined: number }[];
   recentQuotes: any[];
+  pipelineValue: number;
+  wonValue: number;
 }
 
 const COLORS = ['#213d42', '#db5c26', '#f5e5d6', '#6b7280', '#10b981'];
@@ -188,7 +190,7 @@ export default function QuoteAnalytics() {
         <p className="text-muted-foreground">Track quote performance and conversion rates</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard
           title="Total Quotes"
           value={analytics.totalQuotes}
@@ -202,10 +204,22 @@ export default function QuoteAnalytics() {
           icon={TrendingUp}
         />
         <StatCard
-          title="Total Value"
+          title="Total Quote Value"
           value={formatCurrency(analytics.totalValue)}
           subValue={`Avg ${formatCurrency(analytics.averageQuoteValue)}/quote`}
           icon={DollarSign}
+        />
+        <StatCard
+          title="Pipeline Forecast"
+          value={formatCurrency(analytics.pipelineValue)}
+          subValue="Active leads (primary quotes)"
+          icon={TrendingUp}
+        />
+        <StatCard
+          title="Won Revenue"
+          value={formatCurrency(analytics.wonValue)}
+          subValue="Converted opportunities"
+          icon={CheckCircle2}
         />
         <StatCard
           title="Quotes This Week"
