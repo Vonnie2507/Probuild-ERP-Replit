@@ -136,6 +136,23 @@ export function LeadCard({
                 {lead.jobFulfillmentType === "supply_install" ? "S+I" : "Supply"}
               </Badge>
             )}
+            {lead.soilWarning && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div data-testid={`soil-warning-badge-${lead.id}`}>
+                    <SoilWarningBadge warning={lead.soilWarning} />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-sm">
+                  <div className="space-y-1">
+                    <p className="font-semibold text-xs">Soil Type: {lead.soilWarning.toUpperCase()}</p>
+                    {lead.soilInstallNotes && (
+                      <p className="text-xs">{lead.soilInstallNotes}</p>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -201,18 +218,6 @@ export function LeadCard({
             <MapPin className="h-3 w-3" />
             <span className="truncate">{lead.address}</span>
           </div>
-          {lead.soilWarning && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center gap-1.5 mt-1" data-testid={`soil-warning-${lead.id}`}>
-                  <SoilWarningBadge warning={lead.soilWarning} />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-xs">
-                <p className="text-xs">{lead.soilInstallNotes || lead.soilWarning}</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
         </div>
 
         <div className="flex items-center justify-between pt-3 border-t">
