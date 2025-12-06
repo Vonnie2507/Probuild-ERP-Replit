@@ -2187,3 +2187,20 @@ export const insertJobStatusSchema = createInsertSchema(jobStatuses).omit({
 
 export type InsertJobStatus = z.infer<typeof insertJobStatusSchema>;
 export type JobStatus = typeof jobStatuses.$inferSelect;
+
+// Job Status Dependencies - defines prerequisites between statuses
+export const jobStatusDependencies = pgTable("job_status_dependencies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  statusKey: varchar("status_key", { length: 50 }).notNull().references(() => jobStatuses.key),
+  prerequisiteKey: varchar("prerequisite_key", { length: 50 }).notNull().references(() => jobStatuses.key),
+  dependencyType: varchar("dependency_type", { length: 20 }).default("mandatory").notNull(), // "mandatory" or "advisory"
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertJobStatusDependencySchema = createInsertSchema(jobStatusDependencies).omit({ 
+  id: true, 
+  createdAt: true
+});
+
+export type InsertJobStatusDependency = z.infer<typeof insertJobStatusDependencySchema>;
+export type JobStatusDependency = typeof jobStatusDependencies.$inferSelect;

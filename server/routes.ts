@@ -6085,5 +6085,47 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // JOB STATUS DEPENDENCIES
+  // ============================================
+
+  // Get all status dependencies
+  app.get("/api/job-status-dependencies", async (req, res) => {
+    try {
+      const dependencies = await storage.getAllStatusDependencies();
+      res.json(dependencies);
+    } catch (error) {
+      console.error("Error fetching status dependencies:", error);
+      res.status(500).json({ error: "Failed to fetch status dependencies" });
+    }
+  });
+
+  // Get dependencies for a specific status
+  app.get("/api/job-status-dependencies/:statusKey", async (req, res) => {
+    try {
+      const dependencies = await storage.getStatusDependencies(req.params.statusKey);
+      res.json(dependencies);
+    } catch (error) {
+      console.error("Error fetching status dependencies:", error);
+      res.status(500).json({ error: "Failed to fetch status dependencies" });
+    }
+  });
+
+  // Set dependencies for a status (replaces all existing)
+  app.put("/api/job-status-dependencies/:statusKey", requireRoles("admin"), async (req, res) => {
+    try {
+      const { dependencies } = req.body;
+      if (!Array.isArray(dependencies)) {
+        return res.status(400).json({ error: "dependencies must be an array" });
+      }
+      await storage.setStatusDependencies(req.params.statusKey, dependencies);
+      const updated = await storage.getStatusDependencies(req.params.statusKey);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error setting status dependencies:", error);
+      res.status(500).json({ error: "Failed to set status dependencies" });
+    }
+  });
+
   return httpServer;
 }

@@ -71,6 +71,7 @@ import {
   type JobStageCompletion, jobStageCompletions,
   type KanbanColumn, type InsertKanbanColumn, kanbanColumns,
   type JobStatus, type InsertJobStatus, jobStatuses,
+  type JobStatusDependency, jobStatusDependencies,
   dashboardWidgets, roleDashboardLayouts, dashboardWidgetInstances,
 } from "@shared/schema";
 
@@ -575,6 +576,11 @@ export interface IStorage {
   updateJobStatus(id: string, status: Partial<InsertJobStatus>): Promise<JobStatus | undefined>;
   deleteJobStatus(id: string): Promise<boolean>;
   reorderJobStatuses(statusIds: string[]): Promise<boolean>;
+
+  // Job Status Dependencies
+  getStatusDependencies(statusKey: string): Promise<JobStatusDependency[]>;
+  getAllStatusDependencies(): Promise<JobStatusDependency[]>;
+  setStatusDependencies(statusKey: string, dependencies: { prerequisiteKey: string; dependencyType: string }[]): Promise<boolean>;
 }
 
 export interface TransactionFilters {
@@ -3846,6 +3852,31 @@ export class DatabaseStorage implements IStorage {
       await db.update(jobStatuses)
         .set({ sortOrder: i, updatedAt: new Date() })
         .where(eq(jobStatuses.id, statusIds[i]));
+    }
+    return true;
+  }
+
+  // Job Status Dependencies
+  async getStatusDependencies(statusKey: string): Promise<JobStatusDependency[]> {
+    return db.select().from(jobStatusDependencies)
+      .where(eq(jobStatusDependencies.statusKey, statusKey));
+  }
+
+  async getAllStatusDependencies(): Promise<JobStatusDependency[]> {
+    return db.select().from(jobStatusDependencies);
+  }
+
+  async setStatusDependencies(statusKey: string, dependencies: { prerequisiteKey: string; dependencyType: string }[]): Promise<boolean> {
+    await db.delete(jobStatusDependencies)
+      .where(eq(jobStatusDependencies.statusKey, statusKey));
+    
+    if (dependencies.length > 0) {
+      await db.insert(jobStatusDependencies)
+        .values(dependencies.map(dep => ({
+          statusKey,
+          prerequisiteKey: dep.prerequisiteKey,
+          dependencyType: dep.dependencyType
+        })));
     }
     return true;
   }
