@@ -477,6 +477,14 @@ export default function Leads() {
     };
   };
 
+  // DEBUG: Log raw leads from backend API
+  console.log("=== BACKEND DATA (from API) ===");
+  leads.forEach((lead) => {
+    if ((lead as any).soilWarning) {
+      console.log(`${lead.leadNumber}: soilWarning="${(lead as any).soilWarning}", soilInstallNotes="${(lead as any).soilInstallNotes}"`);
+    }
+  });
+
   const kanbanLeads: KanbanLead[] = leads.map((lead) => ({
     id: lead.id,
     leadNumber: lead.leadNumber,
@@ -495,6 +503,14 @@ export default function Leads() {
     soilWarning: (lead as any).soilWarning || null,
     soilInstallNotes: (lead as any).soilInstallNotes || null,
   }));
+
+  // DEBUG: Log mapped kanban leads going to frontend
+  console.log("=== FRONTEND DATA (to Kanban) ===");
+  kanbanLeads.forEach((lead) => {
+    if (lead.soilWarning) {
+      console.log(`${lead.leadNumber}: soilWarning="${lead.soilWarning}", soilInstallNotes="${lead.soilInstallNotes}"`);
+    }
+  });
 
   const handleLeadClick = (lead: KanbanLead) => {
     const originalLead = leads.find(l => l.id === lead.id);
