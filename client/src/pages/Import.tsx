@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { 
   Upload, Download, FileSpreadsheet, Users, ClipboardList, Briefcase,
-  CheckCircle2, AlertCircle, Loader2, X, FileText
+  CheckCircle2, AlertCircle, Loader2, X, FileText, Package
 } from "lucide-react";
 
 interface ParsedRow {
@@ -45,6 +45,13 @@ const jobTemplate = {
   example: ["Bob Wilson", "bob@example.com", "0434567890", "88 Ocean Dr, Scarborough WA 6019", "supply_install", "Colonial", "30", "pending", "Ready for scheduling"],
   required: ["clientName", "siteAddress"],
   description: "Import existing jobs",
+};
+
+const productsTemplate = {
+  headers: ["sku", "name", "category", "costPrice", "sellPrice", "tradePrice", "stockOnHand", "reorderPoint", "description", "dimensions", "color"],
+  example: ["PVC-POST-100", "PVC Post 100mm x 2.4m", "fencing", "25.00", "45.00", "38.00", "50", "10", "Standard PVC fence post", "100x100x2400mm", "White"],
+  required: ["sku", "name", "category", "costPrice", "sellPrice"],
+  description: "Import products and inventory items. Categories: fencing, gates, hardware, accessories, other",
 };
 
 function parseCSV(csvText: string): string[][] {
@@ -90,13 +97,18 @@ function normalizeHeader(header: string): string {
     "clienttype": "clientType",
     "companyname": "companyName",
     "jobtype": "jobType",
+    "costprice": "costPrice",
+    "sellprice": "sellPrice",
+    "tradeprice": "tradePrice",
+    "stockonhand": "stockOnHand",
+    "reorderpoint": "reorderPoint",
   };
   const lower = header.toLowerCase().replace(/\s+/g, "");
   return mapping[lower] || lower;
 }
 
-function downloadTemplate(type: "clients" | "leads" | "jobs") {
-  const templates = { clients: clientTemplate, leads: leadTemplate, jobs: jobTemplate };
+function downloadTemplate(type: "clients" | "leads" | "jobs" | "products") {
+  const templates = { clients: clientTemplate, leads: leadTemplate, jobs: jobTemplate, products: productsTemplate };
   const template = templates[type];
   
   const csvContent = [
@@ -118,7 +130,7 @@ function ImportTab({
   template, 
   icon: Icon 
 }: { 
-  type: "clients" | "leads" | "jobs"; 
+  type: "clients" | "leads" | "jobs" | "products"; 
   template: typeof clientTemplate;
   icon: typeof Users;
 }) {
@@ -423,12 +435,12 @@ export default function Import() {
       <div>
         <h1 className="text-2xl font-semibold">Import Data</h1>
         <p className="text-muted-foreground">
-          Bulk import your existing clients, leads, and jobs from CSV files
+          Bulk import your existing clients, leads, jobs, and products from CSV files
         </p>
       </div>
 
       <Tabs defaultValue="clients" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
+        <TabsList className="grid w-full grid-cols-4 max-w-lg">
           <TabsTrigger value="clients" data-testid="tab-import-clients">
             <Users className="h-4 w-4 mr-2" />
             Clients
@@ -440,6 +452,10 @@ export default function Import() {
           <TabsTrigger value="jobs" data-testid="tab-import-jobs">
             <Briefcase className="h-4 w-4 mr-2" />
             Jobs
+          </TabsTrigger>
+          <TabsTrigger value="products" data-testid="tab-import-products">
+            <Package className="h-4 w-4 mr-2" />
+            Products
           </TabsTrigger>
         </TabsList>
 
@@ -453,6 +469,10 @@ export default function Import() {
 
         <TabsContent value="jobs" className="mt-6">
           <ImportTab type="jobs" template={jobTemplate} icon={Briefcase} />
+        </TabsContent>
+
+        <TabsContent value="products" className="mt-6">
+          <ImportTab type="products" template={productsTemplate} icon={Package} />
         </TabsContent>
       </Tabs>
     </div>

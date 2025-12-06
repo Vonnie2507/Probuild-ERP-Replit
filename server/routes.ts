@@ -5546,5 +5546,66 @@ export async function registerRoutes(
     }
   });
 
+  // Import Products/Inventory
+  app.post("/api/import/products", async (req, res) => {
+    try {
+      const { data } = req.body;
+      if (!Array.isArray(data)) {
+        return res.status(400).json({ error: "Data must be an array" });
+      }
+
+      let success = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (const row of data) {
+        try {
+          const sku = row.sku?.trim();
+          const name = row.name?.trim();
+          const category = row.category?.trim();
+          const costPrice = row.costPrice;
+          const sellPrice = row.sellPrice;
+
+          if (!sku || !name || !category || costPrice === undefined || sellPrice === undefined) {
+            errors.push(`Row missing required fields: sku=${sku || 'missing'}`);
+            failed++;
+            continue;
+          }
+
+          const validCategories = ["fencing", "gates", "hardware", "accessories", "other"];
+          if (!validCategories.includes(category)) {
+            errors.push(`Invalid category for ${sku}: ${category}`);
+            failed++;
+            continue;
+          }
+
+          await storage.createProduct({
+            sku,
+            name,
+            description: row.description?.trim() || null,
+            category: category as any,
+            dimensions: row.dimensions?.trim() || null,
+            color: row.color?.trim() || null,
+            costPrice: String(costPrice),
+            sellPrice: String(sellPrice),
+            tradePrice: row.tradePrice ? String(row.tradePrice) : null,
+            stockOnHand: parseInt(row.stockOnHand) || 0,
+            reorderPoint: parseInt(row.reorderPoint) || 10,
+            isActive: row.isActive !== "false" && row.isActive !== false
+          });
+          success++;
+        } catch (err: any) {
+          failed++;
+          errors.push(`Failed to import product: ${row.sku || 'unknown'} - ${err.message || ''}`);
+        }
+      }
+
+      res.json({ success, failed, errors });
+    } catch (error) {
+      console.error("Error importing products:", error);
+      res.status(500).json({ error: "Failed to import products" });
+    }
+  });
+
   return httpServer;
 }
