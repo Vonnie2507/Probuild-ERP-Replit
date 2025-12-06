@@ -75,7 +75,7 @@ export function JobKanbanCard({ job, onClick }: JobKanbanCardProps) {
             <p className="font-mono text-xs text-muted-foreground" data-testid="kanban-job-number">
               {job.jobNumber}
             </p>
-            <p className="font-medium text-sm truncate" data-testid="kanban-client-name">
+            <p className="font-medium text-sm break-words" data-testid="kanban-client-name">
               {job.clientName}
             </p>
           </div>
@@ -88,20 +88,20 @@ export function JobKanbanCard({ job, onClick }: JobKanbanCardProps) {
           </Badge>
         </div>
 
-        <p className="text-xs text-muted-foreground truncate" data-testid="kanban-address">
+        <p className="text-xs text-muted-foreground break-words" data-testid="kanban-address">
           {job.siteAddress}
         </p>
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           {job.assignedInstallerName ? (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <User className="h-3 w-3" />
-              <span className="truncate max-w-[80px]">{job.assignedInstallerName}</span>
+              <User className="h-3 w-3 shrink-0" />
+              <span className="break-words">{job.assignedInstallerName}</span>
             </div>
           ) : (
             <span className="text-xs text-muted-foreground italic">Unassigned</span>
           )}
-          <span className="font-semibold text-sm" data-testid="kanban-amount">
+          <span className="font-semibold text-sm shrink-0" data-testid="kanban-amount">
             {formatCurrency(job.totalAmount)}
           </span>
         </div>
