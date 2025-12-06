@@ -6,13 +6,17 @@ import { PriorityList } from "@/components/dashboard/PriorityList";
 import { ScheduleSnapshot } from "@/components/dashboard/ScheduleSnapshot";
 import { ProductionOverview } from "@/components/dashboard/ProductionOverview";
 import { AlertsPanel } from "@/components/dashboard/AlertsPanel";
+import { LeadDetailDialog } from "@/components/leads/LeadDetailDialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, FileText, Briefcase, DollarSign, Plus, RefreshCw } from "lucide-react";
-import type { Lead, Quote, Job, ScheduleEvent, ProductionTask, Product, Payment, KanbanColumn, JobStatus, ProductionStage } from "@shared/schema";
+import type { Lead, Quote, Job, ScheduleEvent, ProductionTask, Product, Payment, KanbanColumn, JobStatus, ProductionStage, Client, User as UserType } from "@shared/schema";
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [selectedLeadClient, setSelectedLeadClient] = useState<Client | null>(null);
+  const [leadDialogOpen, setLeadDialogOpen] = useState(false);
 
   const { data: dashboardStats, isLoading: statsLoading, refetch: refetchStats } = useQuery<{
     newLeadsCount: number;
@@ -65,6 +69,14 @@ export default function Dashboard() {
     queryKey: ["/api/production-stages"],
   });
 
+  const { data: clients = [] } = useQuery<Client[]>({
+    queryKey: ["/api/clients"],
+  });
+
+  const { data: users = [] } = useQuery<UserType[]>({
+    queryKey: ["/api/users"],
+  });
+
   const handleRefresh = () => {
     refetchStats();
   };
@@ -72,9 +84,15 @@ export default function Dashboard() {
   const newLeads = leads.filter(l => l.stage === "new");
   const quotesFollowUp = quotes.filter(q => q.status === "sent");
   
+  const getClientName = (clientId: string | null | undefined) => {
+    if (!clientId) return "Unknown Client";
+    const client = clients.find(c => c.id === clientId);
+    return client?.name || "Unknown Client";
+  };
+
   const priorityLeads = newLeads.slice(0, 5).map((lead) => ({
     id: lead.id,
-    title: lead.siteAddress?.split(",")[0] || "New Lead",
+    title: `${lead.leadNumber} - ${getClientName(lead.clientId)}`,
     subtitle: `${lead.fenceStyle || "Unknown style"} - ${lead.fenceLength || "?"}m`,
     status: lead.stage as "new" | "contacted" | "quoted" | "overdue",
     timeAgo: formatTimeAgo(lead.createdAt),
@@ -83,7 +101,7 @@ export default function Dashboard() {
 
   const quotesFollowUpItems = quotesFollowUp.slice(0, 5).map((quote) => ({
     id: quote.id,
-    title: quote.siteAddress?.split(",")[0] || `Quote ${quote.quoteNumber}`,
+    title: `${quote.quoteNumber} - ${getClientName(quote.clientId)}`,
     subtitle: `Quote sent - $${parseFloat(quote.totalAmount).toLocaleString()}`,
     status: "quoted" as const,
     timeAgo: quote.sentAt ? formatTimeAgo(quote.sentAt) : "",
@@ -247,14 +265,33 @@ export default function Dashboard() {
             <PriorityList
               title="New Leads"
               items={priorityLeads}
-              onItemClick={(id) => setLocation(`/leads?id=${id}`)}
+              onItemClick={(item) => {
+                const lead = leads.find(l => l.id === item.id);
+                if (lead) {
+                  const client = clients.find(c => c.id === lead.clientId);
+                  setSelectedLead(lead);
+                  setSelectedLeadClient(client || null);
+                  setLeadDialogOpen(true);
+                }
+              }}
               onViewAll={() => setLocation("/leads")}
               emptyMessage="No new leads"
             />
             <PriorityList
               title="Quotes Awaiting Follow-Up"
               items={quotesFollowUpItems}
-              onItemClick={(id) => setLocation(`/leads?quote=${id}`)}
+              onItemClick={(item) => {
+                const quote = quotes.find(q => q.id === item.id);
+                if (quote && quote.leadId) {
+                  const lead = leads.find(l => l.id === quote.leadId);
+                  if (lead) {
+                    const client = clients.find(c => c.id === lead.clientId);
+                    setSelectedLead(lead);
+                    setSelectedLeadClient(client || null);
+                    setLeadDialogOpen(true);
+                  }
+                }
+              }}
               onViewAll={() => setLocation("/leads")}
               emptyMessage="All quotes followed up"
             />
@@ -278,6 +315,31 @@ export default function Dashboard() {
           />
         </div>
       </div>
+
+      <LeadDetailDialog
+        open={leadDialogOpen}
+        onOpenChange={setLeadDialogOpen}
+        lead={selectedLead}
+        client={selectedLeadClient}
+        quotes={quotes.filter(q => q.leadId === selectedLead?.id)}
+        users={users}
+        onEditLead={() => {
+          setLeadDialogOpen(false);
+          if (selectedLead) {
+            setLocation(`/leads?edit=${selectedLead.id}`);
+          }
+        }}
+        onCreateQuote={() => {
+          setLeadDialogOpen(false);
+          if (selectedLead) {
+            setLocation(`/leads?newQuote=${selectedLead.id}`);
+          }
+        }}
+        onViewQuote={(quote) => {
+          setLeadDialogOpen(false);
+          setLocation(`/leads?quote=${quote.id}`);
+        }}
+      />
     </div>
   );
 }
