@@ -89,8 +89,8 @@ export function JobStageProgress({
                 className={cn(
                   "flex items-center justify-center rounded-sm p-0.5 transition-colors",
                   isCompleted 
-                    ? "text-primary" 
-                    : "text-muted-foreground/40"
+                    ? "text-green-600 dark:text-green-500" 
+                    : "text-muted-foreground/30"
                 )}
                 data-testid={`stage-${stage.id}-${isCompleted ? "completed" : "pending"}`}
               >
