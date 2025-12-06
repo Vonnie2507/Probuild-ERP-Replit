@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Phone, Mail, MapPin, Clock, MoreHorizontal, Pencil, Trash2, ClipboardList, Send, FileText, Pickaxe } from "lucide-react";
+import { Phone, Mail, MapPin, Clock, MoreHorizontal, Pencil, Trash2, ClipboardList, Send, FileText, Pickaxe, MessageSquare, CheckSquare, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,8 +61,12 @@ interface Lead {
   };
   createdAt: string;
   quoteInfo?: QuoteInfo;
-  soilWarning?: string | null; // LIMESTONE, CLAY, ROCK, SAND, etc.
+  soilWarning?: string | null;
   soilInstallNotes?: string | null;
+  hasUnreadMessages?: boolean;
+  hasPendingTasks?: boolean;
+  pendingTaskCount?: number;
+  isAssigned?: boolean;
 }
 
 interface LeadCardProps {
@@ -195,6 +199,43 @@ export function LeadCard({
             <span className="text-xs text-muted-foreground">{lead.assignedTo.name}</span>
           </div>
           <div className="flex items-center gap-2">
+            {(lead.hasUnreadMessages || lead.isAssigned) && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center" data-testid={`message-indicator-${lead.id}`}>
+                    {lead.hasUnreadMessages ? (
+                      <Badge variant="default" className="h-5 w-5 p-0 flex items-center justify-center bg-primary">
+                        <MessageSquare className="h-3 w-3" />
+                      </Badge>
+                    ) : lead.isAssigned ? (
+                      <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center">
+                        <User className="h-3 w-3" />
+                      </Badge>
+                    ) : null}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {lead.hasUnreadMessages ? "Message waiting for reply" : "Assigned to staff"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {lead.hasPendingTasks && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge 
+                    variant="outline" 
+                    className="h-5 px-1.5 text-[10px] gap-0.5 border-warning text-warning"
+                    data-testid={`task-indicator-${lead.id}`}
+                  >
+                    <CheckSquare className="h-3 w-3" />
+                    {lead.pendingTaskCount || 0}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {lead.pendingTaskCount} pending task{lead.pendingTaskCount !== 1 ? 's' : ''}
+                </TooltipContent>
+              </Tooltip>
+            )}
             {lead.quoteInfo && lead.quoteInfo.total > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>

@@ -34,6 +34,10 @@ interface Lead {
   quoteInfo?: QuoteInfo;
   soilWarning?: string | null;
   soilInstallNotes?: string | null;
+  hasUnreadMessages?: boolean;
+  hasPendingTasks?: boolean;
+  pendingTaskCount?: number;
+  isAssigned?: boolean;
 }
 
 interface KanbanColumn {

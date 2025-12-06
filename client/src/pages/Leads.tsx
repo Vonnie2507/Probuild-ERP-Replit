@@ -74,6 +74,10 @@ interface KanbanLead {
   soilInstallNotes?: string | null;
   createdAt: string;
   quoteInfo?: QuoteInfo;
+  hasUnreadMessages?: boolean;
+  hasPendingTasks?: boolean;
+  pendingTaskCount?: number;
+  isAssigned?: boolean;
 }
 
 export default function Leads() {
@@ -129,6 +133,10 @@ export default function Leads() {
 
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
+  });
+
+  const { data: allLeadTasks = [] } = useQuery<{ id: string; leadId: string; status: string }[]>({
+    queryKey: ["/api/lead-tasks"],
   });
 
   // Handle URL parameters for deep linking to specific lead/task
@@ -477,24 +485,34 @@ export default function Leads() {
     };
   };
 
-  const kanbanLeads: KanbanLead[] = leads.map((lead) => ({
-    id: lead.id,
-    leadNumber: lead.leadNumber,
-    clientName: getClientName(lead.clientId),
-    phone: getClientPhone(lead.clientId),
-    email: getClientEmail(lead.clientId),
-    address: lead.siteAddress || "",
-    source: lead.source || "website",
-    fenceStyle: `${lead.fenceStyle || "Unknown"} - ${lead.fenceLength || "?"}m`,
-    leadType: lead.leadType as "public" | "trade",
-    jobFulfillmentType: (lead.jobFulfillmentType as "supply_only" | "supply_install") || "supply_install",
-    status: mapStageToStatus(lead.stage),
-    assignedTo: getAssignedUser(lead.assignedTo),
-    createdAt: formatTimeAgo(lead.createdAt),
-    quoteInfo: getQuoteInfo(lead.id),
-    soilWarning: (lead as any).soilWarning || null,
-    soilInstallNotes: (lead as any).soilInstallNotes || null,
-  }));
+  const getPendingTaskCount = (leadId: string): number => {
+    return allLeadTasks.filter(t => t.leadId === leadId && t.status !== "completed").length;
+  };
+
+  const kanbanLeads: KanbanLead[] = leads.map((lead) => {
+    const pendingTaskCount = getPendingTaskCount(lead.id);
+    return {
+      id: lead.id,
+      leadNumber: lead.leadNumber,
+      clientName: getClientName(lead.clientId),
+      phone: getClientPhone(lead.clientId),
+      email: getClientEmail(lead.clientId),
+      address: lead.siteAddress || "",
+      source: lead.source || "website",
+      fenceStyle: `${lead.fenceStyle || "Unknown"} - ${lead.fenceLength || "?"}m`,
+      leadType: lead.leadType as "public" | "trade",
+      jobFulfillmentType: (lead.jobFulfillmentType as "supply_only" | "supply_install") || "supply_install",
+      status: mapStageToStatus(lead.stage),
+      assignedTo: getAssignedUser(lead.assignedTo),
+      createdAt: formatTimeAgo(lead.createdAt),
+      quoteInfo: getQuoteInfo(lead.id),
+      soilWarning: (lead as any).soilWarning || null,
+      soilInstallNotes: (lead as any).soilInstallNotes || null,
+      hasPendingTasks: pendingTaskCount > 0,
+      pendingTaskCount: pendingTaskCount,
+      isAssigned: !!lead.assignedTo,
+    };
+  });
 
   const handleLeadClick = (lead: KanbanLead) => {
     const originalLead = leads.find(l => l.id === lead.id);

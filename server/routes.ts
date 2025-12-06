@@ -1057,6 +1057,16 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/lead-tasks", async (req, res) => {
+    try {
+      const tasks = await storage.getAllLeadTasks();
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching lead tasks:", error);
+      res.status(500).json({ error: "Failed to fetch lead tasks" });
+    }
+  });
+
   app.patch("/api/lead-tasks/:id", requireRoles("admin", "sales"), async (req, res) => {
     try {
       const { status, title, description, priority, dueDate, assignedTo } = req.body;

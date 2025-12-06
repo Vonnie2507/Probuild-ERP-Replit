@@ -110,6 +110,7 @@ export interface IStorage {
 
   // Lead Tasks
   getLeadTasks(leadId: string): Promise<LeadTask[]>;
+  getAllLeadTasks(): Promise<LeadTask[]>;
   getTasksAssignedToUser(userId: string): Promise<LeadTask[]>;
   createLeadTask(task: InsertLeadTask): Promise<LeadTask>;
   updateLeadTask(id: string, task: Partial<InsertLeadTask>): Promise<LeadTask | undefined>;
@@ -877,6 +878,10 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(leadTasks)
       .where(eq(leadTasks.leadId, leadId))
       .orderBy(desc(leadTasks.createdAt));
+  }
+
+  async getAllLeadTasks(): Promise<LeadTask[]> {
+    return db.select().from(leadTasks).orderBy(desc(leadTasks.createdAt));
   }
 
   async createLeadTask(task: InsertLeadTask): Promise<LeadTask> {
