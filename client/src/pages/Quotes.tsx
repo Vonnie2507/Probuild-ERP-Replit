@@ -219,7 +219,11 @@ export default function Quotes() {
     draft: quotes.filter((q) => q.status === "draft").length,
     sent: quotes.filter((q) => q.status === "sent").length,
     approved: quotes.filter((q) => q.status === "approved").length,
-    totalValue: quotes.reduce((sum, q) => sum + parseFloat(q.totalAmount), 0),
+    // Pipeline Forecast uses opportunity_value from active leads (not sum of all quotes)
+    // This prevents inflation from multiple quotes per lead
+    pipelineForecast: leads
+      .filter((l) => !["won", "lost", "converted_to_job"].includes(l.stage) && l.opportunityValue)
+      .reduce((sum, l) => sum + parseFloat(l.opportunityValue || "0"), 0),
     pendingValue: quotes
       .filter((q) => q.status === "sent")
       .reduce((sum, q) => sum + parseFloat(q.totalAmount), 0),
@@ -314,15 +318,15 @@ export default function Quotes() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
+            <CardTitle className="text-sm font-medium">Pipeline Forecast</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-total-value">
-              ${stats.totalValue.toLocaleString()}
+            <div className="text-2xl font-bold" data-testid="stat-pipeline-forecast">
+              ${stats.pipelineForecast.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              All quotes combined
+              Based on primary quotes
             </p>
           </CardContent>
         </Card>
