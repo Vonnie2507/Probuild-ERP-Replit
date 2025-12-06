@@ -290,6 +290,11 @@ export interface IStorage {
   // Quote Analytics
   getQuoteAnalytics(): Promise<QuoteAnalytics>;
 
+  // Core Analytics (standardized KPIs)
+  getCoreAnalytics(startDate?: Date, endDate?: Date): Promise<CoreAnalytics>;
+  getLeadAnalytics(startDate?: Date, endDate?: Date): Promise<LeadAnalytics>;
+  getSalesAnalytics(startDate?: Date, endDate?: Date): Promise<SalesAnalytics>;
+
   // ============================================
   // PROFIT & LOSS COST TRACKING
   // ============================================
@@ -585,6 +590,43 @@ export interface QuoteAnalytics {
   wonValue: number;
 }
 
+// ============================================
+// CORE ANALYTICS INTERFACES
+// ============================================
+
+export interface DateRange {
+  startDate: Date;
+  endDate: Date;
+}
+
+export interface LeadAnalytics {
+  newLeads: number;
+  totalActiveLeads: number;
+  leadsByStage: { stage: string; count: number }[];
+  leadsBySource: { source: string; count: number }[];
+  averageTimeToFirstResponse: number | null; // in hours
+  averageTimeToQuote: number | null; // in hours
+  averageTimeToClose: number | null; // in days
+  leadsByAssignee: { userId: string; userName: string; count: number }[];
+}
+
+export interface SalesAnalytics {
+  pendingQuotes: number;
+  quoteConversionRate: number; // Won Leads ÷ Leads that received quotes
+  averageDealSize: number; // Mean value of accepted quotes
+  quotePipelineValue: number; // Sum of sent quotes
+  monthlyRevenue: number; // Sum of paid invoices
+  yearToDateRevenue: number;
+  wonValue: number; // Value of won quotes in period
+  lostValue: number; // Value of lost quotes in period
+}
+
+export interface CoreAnalytics {
+  leads: LeadAnalytics;
+  sales: SalesAnalytics;
+  dateRange: DateRange;
+}
+
 export class DatabaseStorage implements IStorage {
   // Users
   async getUser(id: string): Promise<User | undefined> {
@@ -703,10 +745,29 @@ export class DatabaseStorage implements IStorage {
 
   async createLead(lead: InsertLead): Promise<Lead> {
     const leadNumber = await this.generateLeadNumber();
-    const [created] = await db.insert(leads).values({
+    const now = new Date();
+    
+    // Set analytics timestamps based on initial stage
+    const leadData: any = {
       ...lead,
       leadNumber,
-    }).returning();
+    };
+    
+    // If lead is created in a stage past 'new', set timestamps appropriately
+    if (lead.stage && lead.stage !== 'new') {
+      leadData.firstResponseAt = now;
+    }
+    if (lead.stage === 'quote_sent' || lead.stage === 'follow_up') {
+      leadData.quoteSentAt = now;
+    }
+    if (lead.stage === 'won') {
+      leadData.wonAt = now;
+    }
+    if (lead.stage === 'lost') {
+      leadData.lostAt = now;
+    }
+    
+    const [created] = await db.insert(leads).values(leadData).returning();
     return created;
   }
 
@@ -719,10 +780,43 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead | undefined> {
-    const [updated] = await db.update(leads).set({
+    const now = new Date();
+    const updateData: Partial<InsertLead> & { updatedAt: Date } = {
       ...lead,
-      updatedAt: new Date(),
-    }).where(eq(leads.id, id)).returning();
+      updatedAt: now,
+    };
+
+    // Auto-populate analytics timestamps based on stage transitions
+    if (lead.stage) {
+      // Get current lead to check for stage changes
+      const currentLead = await this.getLead(id);
+      if (currentLead) {
+        const oldStage = currentLead.stage;
+        const newStage = lead.stage;
+
+        // First response: when lead moves from 'new' to any other stage
+        if (oldStage === 'new' && newStage !== 'new' && !currentLead.firstResponseAt) {
+          (updateData as any).firstResponseAt = now;
+        }
+
+        // Quote sent: when lead moves to 'quote_sent' stage
+        if (newStage === 'quote_sent' && !currentLead.quoteSentAt) {
+          (updateData as any).quoteSentAt = now;
+        }
+
+        // Won: when lead moves to 'won' stage
+        if (newStage === 'won' && !currentLead.wonAt) {
+          (updateData as any).wonAt = now;
+        }
+
+        // Lost: when lead moves to 'lost' stage
+        if (newStage === 'lost' && !currentLead.lostAt) {
+          (updateData as any).lostAt = now;
+        }
+      }
+    }
+
+    const [updated] = await db.update(leads).set(updateData).where(eq(leads.id, id)).returning();
     return updated;
   }
 
@@ -1190,12 +1284,14 @@ export class DatabaseStorage implements IStorage {
     const opportunityValue = String(totalAmount);
     const balanceDue = String(totalAmount - depositRequired);
 
+    const now = new Date();
     const [updatedLead] = await db.update(leads)
       .set({
         primaryQuoteId: quoteId,
         opportunityValue: opportunityValue,
         stage: "won",
-        updatedAt: new Date(),
+        wonAt: now, // Set analytics timestamp when lead is won
+        updatedAt: now,
       } as any)
       .where(eq(leads.id, quote.leadId))
       .returning();
@@ -3376,6 +3472,204 @@ export class DatabaseStorage implements IStorage {
         ));
     }
     return true;
+  }
+
+  // ============================================
+  // CORE ANALYTICS IMPLEMENTATION
+  // ============================================
+
+  async getLeadAnalytics(startDate?: Date, endDate?: Date): Promise<LeadAnalytics> {
+    const now = new Date();
+    const start = startDate || new Date(now.getFullYear(), now.getMonth(), 1); // Default to start of month
+    const end = endDate || now;
+
+    // Get all leads for analysis
+    const allLeads = await db.select().from(leads);
+    const allUsers = await db.select().from(users);
+    const userMap = new Map(allUsers.map(u => [u.id, `${u.firstName} ${u.lastName}`]));
+
+    // New leads in date range
+    const newLeads = allLeads.filter(l => {
+      const created = new Date(l.createdAt);
+      return created >= start && created <= end;
+    }).length;
+
+    // Total active leads (not won or lost)
+    const totalActiveLeads = allLeads.filter(l => 
+      l.stage !== 'won' && l.stage !== 'lost'
+    ).length;
+
+    // Leads by stage (for pipeline chart)
+    const stageValues = ['new', 'contacted', 'needs_quote', 'quote_sent', 'follow_up', 'won', 'lost'];
+    const leadsByStage = stageValues.map(stage => ({
+      stage,
+      count: allLeads.filter(l => l.stage === stage).length
+    }));
+
+    // Leads by source
+    const sourceMap = new Map<string, number>();
+    allLeads.forEach(l => {
+      const source = l.source || 'unknown';
+      sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
+    });
+    const leadsBySource = Array.from(sourceMap.entries()).map(([source, count]) => ({ source, count }));
+
+    // Calculate average time metrics
+    let totalFirstResponseTime = 0;
+    let firstResponseCount = 0;
+    let totalQuoteTime = 0;
+    let quoteTimeCount = 0;
+    let totalCloseTime = 0;
+    let closeTimeCount = 0;
+
+    allLeads.forEach(l => {
+      if (l.firstResponseAt) {
+        const responseTime = (new Date(l.firstResponseAt).getTime() - new Date(l.createdAt).getTime()) / (1000 * 60 * 60);
+        totalFirstResponseTime += responseTime;
+        firstResponseCount++;
+      }
+      if (l.quoteSentAt) {
+        const quoteTime = (new Date(l.quoteSentAt).getTime() - new Date(l.createdAt).getTime()) / (1000 * 60 * 60);
+        totalQuoteTime += quoteTime;
+        quoteTimeCount++;
+      }
+      if (l.wonAt && l.stage === 'won') {
+        const closeTime = (new Date(l.wonAt).getTime() - new Date(l.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+        totalCloseTime += closeTime;
+        closeTimeCount++;
+      }
+    });
+
+    // Leads by assignee
+    const assigneeMap = new Map<string, number>();
+    allLeads.forEach(l => {
+      if (l.assignedTo) {
+        assigneeMap.set(l.assignedTo, (assigneeMap.get(l.assignedTo) || 0) + 1);
+      }
+    });
+    const leadsByAssignee = Array.from(assigneeMap.entries()).map(([userId, count]) => ({
+      userId,
+      userName: userMap.get(userId) || 'Unknown',
+      count
+    }));
+
+    return {
+      newLeads,
+      totalActiveLeads,
+      leadsByStage,
+      leadsBySource,
+      averageTimeToFirstResponse: firstResponseCount > 0 ? totalFirstResponseTime / firstResponseCount : null,
+      averageTimeToQuote: quoteTimeCount > 0 ? totalQuoteTime / quoteTimeCount : null,
+      averageTimeToClose: closeTimeCount > 0 ? totalCloseTime / closeTimeCount : null,
+      leadsByAssignee
+    };
+  }
+
+  async getSalesAnalytics(startDate?: Date, endDate?: Date): Promise<SalesAnalytics> {
+    const now = new Date();
+    const start = startDate || new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = endDate || now;
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+
+    // Get all leads and payments (using lead-centric approach per spec)
+    const allLeads = await db.select().from(leads);
+    const allPayments = await db.select().from(payments);
+
+    // Pending quotes: Count leads awaiting client decision
+    // Includes quote_sent, follow_up, or any lead with quoteSentAt that isn't won/lost
+    const pendingQuotes = allLeads.filter(l => 
+      (l.stage === 'quote_sent' || l.stage === 'follow_up') ||
+      (l.quoteSentAt && l.stage !== 'won' && l.stage !== 'lost')
+    ).length;
+
+    // Quote Conversion Rate: Won Leads ÷ Leads that ever received quotes
+    // A lead "received a quote" when: quoteSentAt is set OR stage indicates quote was sent
+    // This includes leads in any stage if quoteSentAt is populated
+    const leadsWithQuotesSent = allLeads.filter(l => 
+      l.quoteSentAt !== null || 
+      ['quote_sent', 'follow_up', 'won', 'lost'].includes(l.stage)
+    );
+    const wonLeadsWithQuotes = leadsWithQuotesSent.filter(l => l.stage === 'won').length;
+    const quoteConversionRate = leadsWithQuotesSent.length > 0 
+      ? (wonLeadsWithQuotes / leadsWithQuotesSent.length) * 100 
+      : 0;
+
+    // Average Deal Size: Mean value of opportunity_value from won leads
+    const wonLeads = allLeads.filter(l => l.stage === 'won' && l.opportunityValue);
+    const totalWonValue = wonLeads.reduce((sum, l) => sum + Number(l.opportunityValue || 0), 0);
+    const averageDealSize = wonLeads.length > 0 ? totalWonValue / wonLeads.length : 0;
+
+    // Quote Pipeline Value: Sum of opportunity_value from active leads (not won/lost)
+    // This uses the lead's opportunity_value which is set from the primary quote
+    const activeLeadsWithOpportunity = allLeads.filter(l => 
+      l.stage !== 'won' && l.stage !== 'lost' && l.opportunityValue
+    );
+    const quotePipelineValue = activeLeadsWithOpportunity.reduce((sum, l) => 
+      sum + Number(l.opportunityValue || 0), 0
+    );
+
+    // Monthly Revenue: Sum of paid payments (status='paid' with paidAt set)
+    const paidPaymentsInRange = allPayments.filter(p => {
+      if (p.status !== 'paid' || !p.paidAt) return false;
+      const paidDate = new Date(p.paidAt);
+      return paidDate >= start && paidDate <= end;
+    });
+    const monthlyRevenue = paidPaymentsInRange.reduce((sum, p) => sum + Number(p.amount), 0);
+
+    // Year-to-date Revenue
+    const ytdPayments = allPayments.filter(p => {
+      if (p.status !== 'paid' || !p.paidAt) return false;
+      const paidDate = new Date(p.paidAt);
+      return paidDate >= yearStart && paidDate <= end;
+    });
+    const yearToDateRevenue = ytdPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+
+    // Won value in period (leads that became won in the date range)
+    // Uses wonAt timestamp when available, falls back to createdAt for legacy data
+    const wonInPeriod = allLeads.filter(l => {
+      if (l.stage !== 'won') return false;
+      const wonDate = l.wonAt ? new Date(l.wonAt) : null;
+      if (!wonDate) return false;
+      return wonDate >= start && wonDate <= end;
+    });
+    const wonValue = wonInPeriod.reduce((sum, l) => sum + Number(l.opportunityValue || 0), 0);
+
+    // Lost value in period
+    const lostInPeriod = allLeads.filter(l => {
+      if (l.stage !== 'lost') return false;
+      const lostDate = l.lostAt ? new Date(l.lostAt) : null;
+      if (!lostDate) return false;
+      return lostDate >= start && lostDate <= end;
+    });
+    const lostValue = lostInPeriod.reduce((sum, l) => sum + Number(l.opportunityValue || 0), 0);
+
+    return {
+      pendingQuotes,
+      quoteConversionRate,
+      averageDealSize,
+      quotePipelineValue,
+      monthlyRevenue,
+      yearToDateRevenue,
+      wonValue,
+      lostValue
+    };
+  }
+
+  async getCoreAnalytics(startDate?: Date, endDate?: Date): Promise<CoreAnalytics> {
+    const now = new Date();
+    const start = startDate || new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = endDate || now;
+
+    const [leadsAnalytics, salesAnalytics] = await Promise.all([
+      this.getLeadAnalytics(start, end),
+      this.getSalesAnalytics(start, end)
+    ]);
+
+    return {
+      leads: leadsAnalytics,
+      sales: salesAnalytics,
+      dateRange: { startDate: start, endDate: end }
+    };
   }
 }
 

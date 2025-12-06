@@ -63,6 +63,13 @@ The system employs a modern web architecture with a clear separation of concerns
     -   Role-specific route access: admin (full), sales (leads/quotes/clients), scheduler (jobs/schedule), production_manager (jobs/production/inventory), warehouse (production/inventory), installer (installer app), trade_client (trade portal only)
 -   **Live Document System:** Manages dynamic job setup and handover documents, with template support and lead-level access.
 -   **Analytics & Automation:** Incorporates Quote Analytics Dashboard and configurable Automation Campaigns for SMS, triggered by various business events.
+-   **Core Reporting & Analytics System:** Centralized KPI logic for production-ready dashboards:
+    -   Lead Analytics: New Leads count, Total Active Leads, Leads by Stage/Source, Time to First Response, Time to Quote, Time to Close
+    -   Sales Analytics: Pending Quotes, Lead Conversion Rate (Won Leads ÷ Leads with quotes sent), Average Deal Size, Pipeline Forecast (opportunity_value from active leads), Monthly/YTD Revenue, Won/Lost Value
+    -   Lead timestamp fields: first_response_at, quote_sent_at, won_at, lost_at, lost_reason
+    -   Analytics rules: Multiple quotes = one opportunity; conversion uses lead.status not quote status; direct job creation generates background lead with source="direct_job"
+    -   API endpoints: GET /api/analytics/core, /api/analytics/leads, /api/analytics/sales (all support startDate/endDate query params)
+    -   Quote Analytics page displays both quote-level and lead-level KPIs for accurate forecasting
 -   **Opportunity Value & Primary Quote System:** Prevents forecasting inflation from multiple quotes:
     -   Each lead has opportunity_value (set from primary quote) and primary_quote_id
     -   Each quote has is_primary flag (only one per lead can be primary)

@@ -1283,6 +1283,48 @@ export async function registerRoutes(
     }
   });
 
+  // ============ CORE ANALYTICS ============
+  // Standardized KPI endpoints for dashboards
+
+  app.get("/api/analytics/core", requireRoles("admin", "sales", "scheduler", "production_manager"), async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : undefined;
+      const end = endDate ? new Date(endDate as string) : undefined;
+      const analytics = await storage.getCoreAnalytics(start, end);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching core analytics:", error);
+      res.status(500).json({ error: "Failed to fetch core analytics" });
+    }
+  });
+
+  app.get("/api/analytics/leads", requireRoles("admin", "sales", "scheduler", "production_manager"), async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : undefined;
+      const end = endDate ? new Date(endDate as string) : undefined;
+      const analytics = await storage.getLeadAnalytics(start, end);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching lead analytics:", error);
+      res.status(500).json({ error: "Failed to fetch lead analytics" });
+    }
+  });
+
+  app.get("/api/analytics/sales", requireRoles("admin", "sales", "scheduler", "production_manager"), async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : undefined;
+      const end = endDate ? new Date(endDate as string) : undefined;
+      const analytics = await storage.getSalesAnalytics(start, end);
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching sales analytics:", error);
+      res.status(500).json({ error: "Failed to fetch sales analytics" });
+    }
+  });
+
   app.get("/api/quotes/:id", requireRoles("admin", "sales"), async (req, res) => {
     try {
       const quote = await storage.getQuote(req.params.id);

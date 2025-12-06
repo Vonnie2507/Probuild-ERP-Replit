@@ -45,6 +45,17 @@ interface QuoteAnalytics {
   wonValue: number;
 }
 
+interface SalesAnalytics {
+  pendingQuotes: number;
+  quoteConversionRate: number;
+  averageDealSize: number;
+  quotePipelineValue: number;
+  monthlyRevenue: number;
+  yearToDateRevenue: number;
+  wonValue: number;
+  lostValue: number;
+}
+
 const COLORS = ['#213d42', '#db5c26', '#f5e5d6', '#6b7280', '#10b981'];
 
 const statusColors: Record<string, string> = {
@@ -153,7 +164,11 @@ export default function QuoteAnalytics() {
     queryKey: ['/api/quotes/analytics'],
   });
 
-  if (isLoading) {
+  const { data: salesAnalytics, isLoading: salesLoading } = useQuery<SalesAnalytics>({
+    queryKey: ['/api/analytics/sales'],
+  });
+
+  if (isLoading || salesLoading) {
     return <LoadingSkeleton />;
   }
 
@@ -190,43 +205,58 @@ export default function QuoteAnalytics() {
         <p className="text-muted-foreground">Track quote performance and conversion rates</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-4">
         <StatCard
           title="Total Quotes"
           value={analytics.totalQuotes}
-          subValue={`${analytics.quotesThisWeek} this week`}
+          subValue={`${analytics.quotesThisWeek} this week (${weekChange >= 0 ? '+' : ''}${weekChange}%)`}
           icon={FileText}
+          trend={weekTrend}
         />
         <StatCard
-          title="Conversion Rate"
-          value={`${analytics.conversionRate.toFixed(1)}%`}
-          subValue={`${analytics.approvedQuotes} approved of ${analytics.approvedQuotes + analytics.declinedQuotes} decided`}
+          title="Lead Conversion Rate"
+          value={`${(salesAnalytics?.quoteConversionRate || 0).toFixed(1)}%`}
+          subValue="Won leads with quotes sent"
           icon={TrendingUp}
         />
         <StatCard
-          title="Total Quote Value"
-          value={formatCurrency(analytics.totalValue)}
-          subValue={`Avg ${formatCurrency(analytics.averageQuoteValue)}/quote`}
+          title="Average Deal Size"
+          value={formatCurrency(salesAnalytics?.averageDealSize || 0)}
+          subValue="Mean value of won opportunities"
           icon={DollarSign}
         />
         <StatCard
+          title="Pending Quotes"
+          value={salesAnalytics?.pendingQuotes || analytics.sentQuotes}
+          subValue="Awaiting client response"
+          icon={Send}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-4">
+        <StatCard
           title="Pipeline Forecast"
-          value={formatCurrency(analytics.pipelineValue)}
-          subValue="Active leads (primary quotes)"
+          value={formatCurrency(salesAnalytics?.quotePipelineValue || analytics.pipelineValue)}
+          subValue="Active leads (opportunity value)"
           icon={TrendingUp}
         />
         <StatCard
-          title="Won Revenue"
-          value={formatCurrency(analytics.wonValue)}
+          title="Won This Period"
+          value={formatCurrency(salesAnalytics?.wonValue || analytics.wonValue)}
           subValue="Converted opportunities"
           icon={CheckCircle2}
         />
         <StatCard
-          title="Quotes This Week"
-          value={analytics.quotesThisWeek}
-          subValue={`${weekChange >= 0 ? '+' : ''}${weekChange}% vs last week`}
-          icon={Send}
-          trend={weekTrend}
+          title="Monthly Revenue"
+          value={formatCurrency(salesAnalytics?.monthlyRevenue || 0)}
+          subValue="Paid invoices this month"
+          icon={DollarSign}
+        />
+        <StatCard
+          title="YTD Revenue"
+          value={formatCurrency(salesAnalytics?.yearToDateRevenue || 0)}
+          subValue="Total paid this year"
+          icon={DollarSign}
         />
       </div>
 
