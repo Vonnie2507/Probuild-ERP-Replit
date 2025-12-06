@@ -22,8 +22,9 @@ import {
   ListTodo,
   Link2,
   AlertCircle,
+  Factory,
 } from "lucide-react";
-import type { KanbanColumn, JobStatus, JobStatusDependency } from "@shared/schema";
+import type { KanbanColumn, JobStatus, JobStatusDependency, ProductionStage } from "@shared/schema";
 
 const COLOR_OPTIONS = [
   { value: "bg-slate-100 dark:bg-slate-800", label: "Gray" },
@@ -69,6 +70,18 @@ export default function KanbanColumnSettings() {
   });
   const [statusDependencies, setStatusDependencies] = useState<DependencyConfig[]>([]);
 
+  // Production stage dialog state
+  const [isProductionStageDialogOpen, setIsProductionStageDialogOpen] = useState(false);
+  const [editingProductionStage, setEditingProductionStage] = useState<ProductionStage | null>(null);
+  const [productionStageFormData, setProductionStageFormData] = useState({
+    key: "",
+    label: "",
+    description: "",
+    icon: "Factory",
+    color: "bg-chart-1",
+    isActive: true,
+  });
+
   // Fetch columns, statuses, and all dependencies
   const { data: columns = [], isLoading: columnsLoading } = useQuery<KanbanColumn[]>({
     queryKey: ["/api/kanban-columns"],
@@ -80,6 +93,10 @@ export default function KanbanColumnSettings() {
 
   const { data: allDependencies = [] } = useQuery<JobStatusDependency[]>({
     queryKey: ["/api/job-status-dependencies"],
+  });
+
+  const { data: productionStages = [], isLoading: productionStagesLoading } = useQuery<ProductionStage[]>({
+    queryKey: ["/api/production-stages"],
   });
 
   // Column mutations
@@ -199,6 +216,60 @@ export default function KanbanColumnSettings() {
     },
     onError: () => {
       toast({ title: "Failed to save dependencies", variant: "destructive" });
+    },
+  });
+
+  // Production stage mutations
+  const createProductionStageMutation = useMutation({
+    mutationFn: async (data: typeof productionStageFormData) => {
+      return apiRequest("POST", "/api/production-stages", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/production-stages"] });
+      toast({ title: "Production stage created successfully" });
+      closeProductionStageDialog();
+    },
+    onError: () => {
+      toast({ title: "Failed to create production stage", variant: "destructive" });
+    },
+  });
+
+  const updateProductionStageMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof productionStageFormData }) => {
+      return apiRequest("PATCH", `/api/production-stages/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/production-stages"] });
+      toast({ title: "Production stage updated successfully" });
+      closeProductionStageDialog();
+    },
+    onError: () => {
+      toast({ title: "Failed to update production stage", variant: "destructive" });
+    },
+  });
+
+  const deleteProductionStageMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/production-stages/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/production-stages"] });
+      toast({ title: "Production stage deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete production stage", variant: "destructive" });
+    },
+  });
+
+  const reorderProductionStageMutation = useMutation({
+    mutationFn: async (stageIds: string[]) => {
+      return apiRequest("POST", "/api/production-stages/reorder", { stageIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/production-stages"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to reorder production stages", variant: "destructive" });
     },
   });
 
@@ -366,7 +437,64 @@ export default function KanbanColumnSettings() {
     return allDependencies.filter(d => d.statusKey === statusKey).length;
   };
 
-  const isLoading = columnsLoading || statusesLoading;
+  // Production stage dialog handlers
+  const openCreateProductionStageDialog = () => {
+    setEditingProductionStage(null);
+    setProductionStageFormData({
+      key: "",
+      label: "",
+      description: "",
+      icon: "Factory",
+      color: "bg-chart-1",
+      isActive: true,
+    });
+    setIsProductionStageDialogOpen(true);
+  };
+
+  const openEditProductionStageDialog = (stage: ProductionStage) => {
+    setEditingProductionStage(stage);
+    setProductionStageFormData({
+      key: stage.key,
+      label: stage.label,
+      description: stage.description || "",
+      icon: stage.icon || "Factory",
+      color: stage.color || "bg-chart-1",
+      isActive: stage.isActive,
+    });
+    setIsProductionStageDialogOpen(true);
+  };
+
+  const closeProductionStageDialog = () => {
+    setIsProductionStageDialogOpen(false);
+    setEditingProductionStage(null);
+  };
+
+  const handleProductionStageSubmit = () => {
+    if (!productionStageFormData.key || !productionStageFormData.label) {
+      toast({ title: "Please fill in key and label", variant: "destructive" });
+      return;
+    }
+
+    if (editingProductionStage) {
+      updateProductionStageMutation.mutate({ id: editingProductionStage.id, data: productionStageFormData });
+    } else {
+      createProductionStageMutation.mutate(productionStageFormData);
+    }
+  };
+
+  const moveProductionStage = (index: number, direction: "up" | "down") => {
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= productionStages.length) return;
+
+    const newStages = [...productionStages];
+    const temp = newStages[index];
+    newStages[index] = newStages[newIndex];
+    newStages[newIndex] = temp;
+
+    reorderProductionStageMutation.mutate(newStages.map((s) => s.id));
+  };
+
+  const isLoading = columnsLoading || statusesLoading || productionStagesLoading;
 
   if (isLoading) {
     return (
@@ -400,6 +528,10 @@ export default function KanbanColumnSettings() {
           <TabsTrigger value="statuses" className="flex items-center gap-2">
             <ListTodo className="h-4 w-4" />
             Job Statuses
+          </TabsTrigger>
+          <TabsTrigger value="production" className="flex items-center gap-2">
+            <Factory className="h-4 w-4" />
+            Production Stages
           </TabsTrigger>
         </TabsList>
 
@@ -589,6 +721,109 @@ export default function KanbanColumnSettings() {
                   <ListTodo className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No job statuses configured yet.</p>
                   <p className="text-sm">Click "Add Status" to create your first status.</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="production" className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={openCreateProductionStageDialog} data-testid="button-add-production-stage">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Stage
+            </Button>
+          </div>
+
+          <div className="text-sm text-muted-foreground mb-4">
+            Configure the manufacturing stages displayed in production widgets and the Production Manager page.
+            These stages track the progress of production tasks (e.g., Manufacturing Posts, Panels, Gates, QA Check).
+          </div>
+
+          <div className="space-y-2">
+            {productionStages.map((stage, index) => (
+              <Card key={stage.id} data-testid={`card-production-stage-${stage.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="cursor-move text-muted-foreground">
+                      <GripVertical className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => moveProductionStage(index, "up")}
+                        disabled={index === 0}
+                        data-testid={`button-move-stage-up-${stage.id}`}
+                      >
+                        <ArrowUp className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => moveProductionStage(index, "down")}
+                        disabled={index === productionStages.length - 1}
+                        data-testid={`button-move-stage-down-${stage.id}`}
+                      >
+                        <ArrowDown className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">{stage.label}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {stage.key}
+                        </Badge>
+                        {!stage.isActive && (
+                          <Badge variant="secondary" className="text-xs">
+                            Inactive
+                          </Badge>
+                        )}
+                        {stage.icon && (
+                          <Badge variant="outline" className="text-xs">
+                            Icon: {stage.icon}
+                          </Badge>
+                        )}
+                      </div>
+                      {stage.description && (
+                        <p className="text-sm text-muted-foreground">{stage.description}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditProductionStageDialog(stage)}
+                        data-testid={`button-edit-production-stage-${stage.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm("Are you sure you want to delete this production stage?")) {
+                            deleteProductionStageMutation.mutate(stage.id);
+                          }
+                        }}
+                        data-testid={`button-delete-production-stage-${stage.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {productionStages.length === 0 && (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  <Factory className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No production stages configured yet.</p>
+                  <p className="text-sm">Click "Add Stage" to create your first production stage.</p>
                 </CardContent>
               </Card>
             )}
@@ -871,6 +1106,113 @@ export default function KanbanColumnSettings() {
               data-testid="button-save-status"
             >
               {editingStatus ? "Update" : "Create"} Status
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Production Stage Dialog */}
+      <Dialog open={isProductionStageDialogOpen} onOpenChange={setIsProductionStageDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {editingProductionStage ? "Edit Production Stage" : "Add New Production Stage"}
+            </DialogTitle>
+            <DialogDescription>
+              Configure the production stage settings
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="stageKey">Stage Key</Label>
+              <Input
+                id="stageKey"
+                value={productionStageFormData.key}
+                onChange={(e) => setProductionStageFormData({ ...productionStageFormData, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+                placeholder="e.g., manufacturing_posts"
+                disabled={!!editingProductionStage}
+                data-testid="input-production-stage-key"
+              />
+              <p className="text-xs text-muted-foreground">
+                Unique identifier (lowercase, underscores). Cannot be changed after creation.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="stageLabel">Display Label</Label>
+              <Input
+                id="stageLabel"
+                value={productionStageFormData.label}
+                onChange={(e) => setProductionStageFormData({ ...productionStageFormData, label: e.target.value })}
+                placeholder="e.g., Manufacturing Posts"
+                data-testid="input-production-stage-label"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="stageDescription">Description (optional)</Label>
+              <Input
+                id="stageDescription"
+                value={productionStageFormData.description}
+                onChange={(e) => setProductionStageFormData({ ...productionStageFormData, description: e.target.value })}
+                placeholder="Brief description of this stage"
+                data-testid="input-production-stage-description"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="stageIcon">Icon Name (Lucide)</Label>
+              <Input
+                id="stageIcon"
+                value={productionStageFormData.icon}
+                onChange={(e) => setProductionStageFormData({ ...productionStageFormData, icon: e.target.value })}
+                placeholder="e.g., Factory, Columns, DoorOpen, CheckCircle"
+                data-testid="input-production-stage-icon"
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter a Lucide icon name (e.g., Factory, Columns, DoorOpen, CheckCircle)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Stage Color</Label>
+              <Select
+                value={productionStageFormData.color}
+                onValueChange={(value) => setProductionStageFormData({ ...productionStageFormData, color: value })}
+              >
+                <SelectTrigger data-testid="select-production-stage-color">
+                  <SelectValue placeholder="Select color" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bg-chart-1">Chart 1 (Blue)</SelectItem>
+                  <SelectItem value="bg-chart-2">Chart 2 (Green)</SelectItem>
+                  <SelectItem value="bg-chart-3">Chart 3 (Orange)</SelectItem>
+                  <SelectItem value="bg-chart-4">Chart 4 (Purple)</SelectItem>
+                  <SelectItem value="bg-chart-5">Chart 5 (Pink)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Switch
+                id="stageIsActive"
+                checked={productionStageFormData.isActive}
+                onCheckedChange={(checked) => setProductionStageFormData({ ...productionStageFormData, isActive: checked })}
+                data-testid="switch-production-stage-is-active"
+              />
+              <Label htmlFor="stageIsActive">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeProductionStageDialog}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleProductionStageSubmit}
+              disabled={createProductionStageMutation.isPending || updateProductionStageMutation.isPending}
+              data-testid="button-save-production-stage"
+            >
+              {editingProductionStage ? "Update" : "Create"} Stage
             </Button>
           </DialogFooter>
         </DialogContent>
