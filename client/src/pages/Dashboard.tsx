@@ -9,7 +9,7 @@ import { AlertsPanel } from "@/components/dashboard/AlertsPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, FileText, Briefcase, DollarSign, Plus, RefreshCw } from "lucide-react";
-import type { Lead, Quote, Job, ScheduleEvent, ProductionTask, Product, Payment, KanbanColumn, JobStatus } from "@shared/schema";
+import type { Lead, Quote, Job, ScheduleEvent, ProductionTask, Product, Payment, KanbanColumn, JobStatus, ProductionStage } from "@shared/schema";
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -59,6 +59,10 @@ export default function Dashboard() {
 
   const { data: jobStatuses = [] } = useQuery<JobStatus[]>({
     queryKey: ["/api/job-statuses"],
+  });
+
+  const { data: configuredStages = [] } = useQuery<ProductionStage[]>({
+    queryKey: ["/api/production-stages"],
   });
 
   const handleRefresh = () => {
@@ -115,16 +119,17 @@ export default function Dashboard() {
   const productionColumn = kanbanColumns.find(c => c.title.toLowerCase().includes("production"));
   const productionStatusKeys = productionColumn?.statuses || [];
   
-  const productionStages = productionStatusKeys.map((statusKey) => {
-    const statusInfo = jobStatuses.find(s => s.key === statusKey);
-    const jobsInStatus = jobs.filter(j => j.status === statusKey);
-    const totalProductionJobs = jobs.filter(j => productionStatusKeys.includes(j.status || "")).length;
-    const progress = totalProductionJobs > 0 ? Math.round((jobsInStatus.length / totalProductionJobs) * 100) : 0;
+  const productionStages = configuredStages.map((stage) => {
+    const jobsInStage = jobs.filter(j => j.status === stage.key);
+    const totalProductionJobs = jobs.filter(j => 
+      configuredStages.some(s => s.key === j.status)
+    ).length;
+    const progress = totalProductionJobs > 0 ? Math.round((jobsInStage.length / totalProductionJobs) * 100) : 0;
     
     return {
-      statusKey,
-      label: statusInfo?.label || statusKey,
-      jobCount: jobsInStatus.length,
+      statusKey: stage.key,
+      label: stage.label,
+      jobCount: jobsInStage.length,
       progress,
     };
   });
@@ -264,7 +269,7 @@ export default function Dashboard() {
         <div className="space-y-6">
           <ProductionOverview
             stages={productionStages}
-            totalActiveJobs={jobs.filter(j => productionStatusKeys.includes(j.status || "")).length}
+            totalActiveJobs={jobs.filter(j => configuredStages.some(s => s.key === j.status)).length}
             onViewProduction={() => setLocation("/production")}
           />
           <AlertsPanel 
