@@ -176,7 +176,7 @@ export function CalendarView({ events, onEventClick, onAddEvent }: CalendarViewP
   const weekDays = getWeekDays();
   const dayData = getDayData();
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const hours = Array.from({ length: 14 }, (_, i) => i + 6); // 6am to 7pm
+  const hours = Array.from({ length: 11 }, (_, i) => i + 6); // 6am to 4pm
 
   // Event badge component
   const EventBadge = ({ event }: { event: CalendarEvent }) => {
