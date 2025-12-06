@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -140,9 +140,9 @@ export function JobKanbanBoard({
 
   if (isLoading) {
     return (
-      <div className="flex gap-4 p-4 overflow-x-auto">
+      <div className="grid grid-cols-5 gap-4 p-4 min-w-0">
         {KANBAN_COLUMNS.map((column) => (
-          <div key={column.id} className="flex-shrink-0 w-80">
+          <div key={column.id} className="min-w-0">
             <Card className="h-full">
               <CardHeader className="pb-2">
                 <Skeleton className="h-6 w-32" />
@@ -160,8 +160,8 @@ export function JobKanbanBoard({
   }
 
   return (
-    <ScrollArea className="w-full whitespace-nowrap" data-testid="kanban-board">
-      <div className="flex gap-4 p-4">
+    <div className="w-full p-4" data-testid="kanban-board">
+      <div className="grid grid-cols-5 gap-4 min-w-0">
         {KANBAN_COLUMNS.map((column) => {
           const columnJobs = getJobsForColumn(column);
           const columnTotal = columnJobs.reduce(
@@ -173,7 +173,7 @@ export function JobKanbanBoard({
           return (
             <div 
               key={column.id} 
-              className="flex-shrink-0 w-80"
+              className="min-w-0"
               data-testid={`kanban-column-${column.id}`}
               onDragOver={(e) => handleDragOver(e, column.id)}
               onDragLeave={handleDragLeave}
@@ -254,7 +254,6 @@ export function JobKanbanBoard({
           );
         })}
       </div>
-      <ScrollBar orientation="horizontal" />
-    </ScrollArea>
+    </div>
   );
 }
