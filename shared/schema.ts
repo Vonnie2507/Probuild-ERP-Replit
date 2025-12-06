@@ -2227,3 +2227,129 @@ export const insertProductionStageSchema = createInsertSchema(productionStages).
 
 export type InsertProductionStage = z.infer<typeof insertProductionStageSchema>;
 export type ProductionStage = typeof productionStages.$inferSelect;
+
+// ==================== VOICE CALL & AI COACHING ====================
+
+// Voice call status enum
+export const voiceCallStatusEnum = pgEnum("voice_call_status", [
+  "ringing",
+  "in_progress",
+  "completed",
+  "failed",
+  "busy",
+  "no_answer",
+  "canceled"
+]);
+
+// Voice Calls - tracks all voice calls made/received
+export const voiceCalls = pgTable("voice_calls", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  twilioCallSid: varchar("twilio_call_sid", { length: 100 }).unique(),
+  direction: callDirectionEnum("direction").notNull(),
+  status: voiceCallStatusEnum("status").default("ringing").notNull(),
+  fromNumber: varchar("from_number", { length: 20 }).notNull(),
+  toNumber: varchar("to_number", { length: 20 }).notNull(),
+  staffUserId: varchar("staff_user_id").references(() => users.id),
+  clientId: varchar("client_id").references(() => clients.id),
+  leadId: varchar("lead_id").references(() => leads.id),
+  duration: integer("duration"), // in seconds
+  recordingUrl: text("recording_url"),
+  recordingSid: varchar("recording_sid", { length: 100 }),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  answeredAt: timestamp("answered_at"),
+  endedAt: timestamp("ended_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertVoiceCallSchema = createInsertSchema(voiceCalls).omit({ 
+  id: true, 
+  createdAt: true
+});
+
+export type InsertVoiceCall = z.infer<typeof insertVoiceCallSchema>;
+export type VoiceCall = typeof voiceCalls.$inferSelect;
+
+// Call Transcripts - stores transcription chunks (real-time or post-call)
+export const callTranscripts = pgTable("call_transcripts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  callId: varchar("call_id").notNull().references(() => voiceCalls.id, { onDelete: "cascade" }),
+  speaker: varchar("speaker", { length: 20 }).notNull(), // "staff" or "customer"
+  text: text("text").notNull(),
+  startTime: decimal("start_time", { precision: 10, scale: 2 }), // seconds from call start
+  endTime: decimal("end_time", { precision: 10, scale: 2 }),
+  confidence: decimal("confidence", { precision: 5, scale: 4 }),
+  isInterim: boolean("is_interim").default(false), // true for real-time partial transcripts
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCallTranscriptSchema = createInsertSchema(callTranscripts).omit({ 
+  id: true, 
+  createdAt: true
+});
+
+export type InsertCallTranscript = z.infer<typeof insertCallTranscriptSchema>;
+export type CallTranscript = typeof callTranscripts.$inferSelect;
+
+// Sales Checklist Items - configurable questions staff should ask
+export const salesChecklistItems = pgTable("sales_checklist_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  question: varchar("question", { length: 255 }).notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 50 }), // e.g., "requirements", "budget", "timeline"
+  keywords: text("keywords").array(), // words that indicate this was asked
+  suggestedResponse: text("suggested_response"), // AI can show this as a hint
+  isRequired: boolean("is_required").default(false).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSalesChecklistItemSchema = createInsertSchema(salesChecklistItems).omit({ 
+  id: true, 
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertSalesChecklistItem = z.infer<typeof insertSalesChecklistItemSchema>;
+export type SalesChecklistItem = typeof salesChecklistItems.$inferSelect;
+
+// Call Checklist Status - tracks which items were covered in each call
+export const callChecklistStatus = pgTable("call_checklist_status", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  callId: varchar("call_id").notNull().references(() => voiceCalls.id, { onDelete: "cascade" }),
+  checklistItemId: varchar("checklist_item_id").notNull().references(() => salesChecklistItems.id, { onDelete: "cascade" }),
+  isCovered: boolean("is_covered").default(false).notNull(),
+  coveredAt: timestamp("covered_at"),
+  detectedText: text("detected_text"), // the transcript text that triggered this
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCallChecklistStatusSchema = createInsertSchema(callChecklistStatus).omit({ 
+  id: true, 
+  createdAt: true
+});
+
+export type InsertCallChecklistStatus = z.infer<typeof insertCallChecklistStatusSchema>;
+export type CallChecklistStatus = typeof callChecklistStatus.$inferSelect;
+
+// Call Coaching Prompts - AI-generated prompts shown during calls
+export const callCoachingPrompts = pgTable("call_coaching_prompts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  callId: varchar("call_id").notNull().references(() => voiceCalls.id, { onDelete: "cascade" }),
+  promptType: varchar("prompt_type", { length: 50 }).notNull(), // "reminder", "suggestion", "warning"
+  message: text("message").notNull(),
+  relatedChecklistItemId: varchar("related_checklist_item_id").references(() => salesChecklistItems.id),
+  triggerText: text("trigger_text"), // what triggered this prompt
+  wasAcknowledged: boolean("was_acknowledged").default(false),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCallCoachingPromptSchema = createInsertSchema(callCoachingPrompts).omit({ 
+  id: true, 
+  createdAt: true
+});
+
+export type InsertCallCoachingPrompt = z.infer<typeof insertCallCoachingPromptSchema>;
+export type CallCoachingPrompt = typeof callCoachingPrompts.$inferSelect;

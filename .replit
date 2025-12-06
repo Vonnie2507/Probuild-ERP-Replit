@@ -15,6 +15,10 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
+localPort = 33757
+externalPort = 8000
+
+[[ports]]
 localPort = 34211
 externalPort = 3000
 
@@ -75,7 +79,7 @@ args = "npm run dev"
 waitForPort = 5000
 
 [agent]
-integrations = ["stripe:1.0.0", "javascript_log_in_with_replit:1.0.0", "twilio:1.0.0", "javascript_database:1.0.0"]
+integrations = ["stripe:1.0.0", "javascript_log_in_with_replit:1.0.0", "twilio:1.0.0", "javascript_database:1.0.0", "javascript_openai_ai_integrations:1.0.0"]
 
 [userenv]
 
