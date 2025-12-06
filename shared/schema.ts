@@ -443,6 +443,7 @@ export const jobs = pgTable("jobs", {
   photos: jsonb("photos").$type<JobPhoto[]>(),
   hasGate: boolean("has_gate").default(false),
   isDelayed: boolean("is_delayed").default(false),
+  pipelineId: varchar("pipeline_id").references(() => jobPipelines.id),
   isWaitingOnClient: boolean("is_waiting_on_client").default(false),
   stagesCompleted: jsonb("stages_completed").$type<number[]>().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -2120,9 +2121,26 @@ export const insertJobPipelineStageSchema = createInsertSchema(jobPipelineStages
   updatedAt: true
 });
 
+// Job Stage Completions - tracks which stages are completed for each job
+export const jobStageCompletions = pgTable("job_stage_completions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  stageId: varchar("stage_id").notNull().references(() => jobPipelineStages.id, { onDelete: "cascade" }),
+  completedAt: timestamp("completed_at").defaultNow().notNull(),
+  completedBy: varchar("completed_by").references(() => users.id),
+});
+
+export const insertJobStageCompletionSchema = createInsertSchema(jobStageCompletions).omit({ 
+  id: true, 
+  completedAt: true
+});
+
 // Types for pipelines
 export type InsertJobPipeline = z.infer<typeof insertJobPipelineSchema>;
 export type JobPipeline = typeof jobPipelines.$inferSelect;
 
 export type InsertJobPipelineStage = z.infer<typeof insertJobPipelineStageSchema>;
 export type JobPipelineStage = typeof jobPipelineStages.$inferSelect;
+
+export type InsertJobStageCompletion = z.infer<typeof insertJobStageCompletionSchema>;
+export type JobStageCompletion = typeof jobStageCompletions.$inferSelect;
