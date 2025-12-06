@@ -1,4 +1,4 @@
-import { eq, desc, and, gte, lte, like, ilike, or, sql, isNull, isNotNull, ne } from "drizzle-orm";
+import { eq, desc, and, gte, lte, like, ilike, or, sql, isNull, isNotNull, ne, inArray } from "drizzle-orm";
 import { db } from "./db";
 import {
   users, clients, leads, fenceStyles, products, quotes, jobs, bom,
@@ -3498,6 +3498,8 @@ export class DatabaseStorage implements IStorage {
         eq(jobStageCompletions.stageId, stageId)
       ));
 
+    let completed: boolean;
+    
     if (existing) {
       // Remove the completion (toggle off)
       await db.delete(jobStageCompletions)
@@ -3505,7 +3507,7 @@ export class DatabaseStorage implements IStorage {
           eq(jobStageCompletions.jobId, jobId),
           eq(jobStageCompletions.stageId, stageId)
         ));
-      return { completed: false };
+      completed = false;
     } else {
       // Add the completion (toggle on)
       await db.insert(jobStageCompletions).values({
@@ -3513,8 +3515,33 @@ export class DatabaseStorage implements IStorage {
         stageId,
         completedBy: userId,
       });
-      return { completed: true };
+      completed = true;
     }
+
+    // Sync the legacy stagesCompleted array for kanban view
+    // Get all completions for this job
+    const allCompletions = await db.select().from(jobStageCompletions)
+      .where(eq(jobStageCompletions.jobId, jobId));
+    
+    // Get the stages with their sortOrder
+    const stageIds = allCompletions.map(c => c.stageId);
+    if (stageIds.length > 0) {
+      const stages = await db.select().from(jobPipelineStages)
+        .where(inArray(jobPipelineStages.id, stageIds));
+      
+      // Convert to legacy format: array of (sortOrder + 1) for each completed stage
+      const stagesCompletedArray = stages.map(s => s.sortOrder + 1);
+      
+      await db.update(jobs)
+        .set({ stagesCompleted: stagesCompletedArray, updatedAt: new Date() })
+        .where(eq(jobs.id, jobId));
+    } else {
+      await db.update(jobs)
+        .set({ stagesCompleted: [], updatedAt: new Date() })
+        .where(eq(jobs.id, jobId));
+    }
+    
+    return { completed };
   }
 
   // ============================================
