@@ -72,6 +72,7 @@ import {
   type KanbanColumn, type InsertKanbanColumn, kanbanColumns,
   type JobStatus, type InsertJobStatus, jobStatuses,
   type JobStatusDependency, jobStatusDependencies,
+  type ProductionStage, type InsertProductionStage, productionStages,
   dashboardWidgets, roleDashboardLayouts, dashboardWidgetInstances,
 } from "@shared/schema";
 
@@ -581,6 +582,14 @@ export interface IStorage {
   getStatusDependencies(statusKey: string): Promise<JobStatusDependency[]>;
   getAllStatusDependencies(): Promise<JobStatusDependency[]>;
   setStatusDependencies(statusKey: string, dependencies: { prerequisiteKey: string; dependencyType: string }[]): Promise<boolean>;
+
+  // Production Stages
+  getProductionStages(): Promise<ProductionStage[]>;
+  getProductionStage(id: string): Promise<ProductionStage | undefined>;
+  createProductionStage(stage: InsertProductionStage): Promise<ProductionStage>;
+  updateProductionStage(id: string, stage: Partial<InsertProductionStage>): Promise<ProductionStage | undefined>;
+  deleteProductionStage(id: string): Promise<boolean>;
+  reorderProductionStages(stageIds: string[]): Promise<boolean>;
 }
 
 export interface TransactionFilters {
@@ -3877,6 +3886,50 @@ export class DatabaseStorage implements IStorage {
           prerequisiteKey: dep.prerequisiteKey,
           dependencyType: dep.dependencyType
         })));
+    }
+    return true;
+  }
+
+  // Production Stages
+  async getProductionStages(): Promise<ProductionStage[]> {
+    return db.select().from(productionStages)
+      .where(eq(productionStages.isActive, true))
+      .orderBy(productionStages.sortOrder);
+  }
+
+  async getProductionStage(id: string): Promise<ProductionStage | undefined> {
+    const [stage] = await db.select().from(productionStages).where(eq(productionStages.id, id));
+    return stage;
+  }
+
+  async createProductionStage(stage: InsertProductionStage): Promise<ProductionStage> {
+    const maxOrder = await db.select({ max: sql<number>`COALESCE(MAX(sort_order), -1)` }).from(productionStages);
+    const sortOrder = (maxOrder[0]?.max ?? -1) + 1;
+    
+    const [created] = await db.insert(productionStages)
+      .values({ ...stage, sortOrder })
+      .returning();
+    return created;
+  }
+
+  async updateProductionStage(id: string, stage: Partial<InsertProductionStage>): Promise<ProductionStage | undefined> {
+    const [updated] = await db.update(productionStages)
+      .set({ ...stage, updatedAt: new Date() })
+      .where(eq(productionStages.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProductionStage(id: string): Promise<boolean> {
+    const result = await db.delete(productionStages).where(eq(productionStages.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async reorderProductionStages(stageIds: string[]): Promise<boolean> {
+    for (let i = 0; i < stageIds.length; i++) {
+      await db.update(productionStages)
+        .set({ sortOrder: i, updatedAt: new Date() })
+        .where(eq(productionStages.id, stageIds[i]));
     }
     return true;
   }

@@ -6127,5 +6127,89 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // PRODUCTION STAGES
+  // ============================================
+
+  // Get all production stages
+  app.get("/api/production-stages", async (req, res) => {
+    try {
+      const stages = await storage.getProductionStages();
+      res.json(stages);
+    } catch (error) {
+      console.error("Error fetching production stages:", error);
+      res.status(500).json({ error: "Failed to fetch production stages" });
+    }
+  });
+
+  // Get single production stage
+  app.get("/api/production-stages/:id", async (req, res) => {
+    try {
+      const stage = await storage.getProductionStage(req.params.id);
+      if (!stage) {
+        return res.status(404).json({ error: "Production stage not found" });
+      }
+      res.json(stage);
+    } catch (error) {
+      console.error("Error fetching production stage:", error);
+      res.status(500).json({ error: "Failed to fetch production stage" });
+    }
+  });
+
+  // Create production stage
+  app.post("/api/production-stages", requireRoles("admin"), async (req, res) => {
+    try {
+      const stage = await storage.createProductionStage(req.body);
+      res.status(201).json(stage);
+    } catch (error) {
+      console.error("Error creating production stage:", error);
+      res.status(500).json({ error: "Failed to create production stage" });
+    }
+  });
+
+  // Update production stage
+  app.patch("/api/production-stages/:id", requireRoles("admin"), async (req, res) => {
+    try {
+      const stage = await storage.updateProductionStage(req.params.id, req.body);
+      if (!stage) {
+        return res.status(404).json({ error: "Production stage not found" });
+      }
+      res.json(stage);
+    } catch (error) {
+      console.error("Error updating production stage:", error);
+      res.status(500).json({ error: "Failed to update production stage" });
+    }
+  });
+
+  // Delete production stage
+  app.delete("/api/production-stages/:id", requireRoles("admin"), async (req, res) => {
+    try {
+      const success = await storage.deleteProductionStage(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Production stage not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting production stage:", error);
+      res.status(500).json({ error: "Failed to delete production stage" });
+    }
+  });
+
+  // Reorder production stages
+  app.post("/api/production-stages/reorder", requireRoles("admin"), async (req, res) => {
+    try {
+      const { stageIds } = req.body;
+      if (!Array.isArray(stageIds)) {
+        return res.status(400).json({ error: "stageIds must be an array" });
+      }
+      await storage.reorderProductionStages(stageIds);
+      const stages = await storage.getProductionStages();
+      res.json(stages);
+    } catch (error) {
+      console.error("Error reordering production stages:", error);
+      res.status(500).json({ error: "Failed to reorder production stages" });
+    }
+  });
+
   return httpServer;
 }
