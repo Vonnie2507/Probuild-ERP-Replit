@@ -110,6 +110,7 @@ export default function Leads() {
   });
   const [siteCoordinates, setSiteCoordinates] = useState<{ lat: number; lng: number } | null>(null);
   const [soilData, setSoilData] = useState<{ warning: string | null; notes: string | null }>({ warning: null, notes: null });
+  const [isSoilDataLoading, setIsSoilDataLoading] = useState(false);
   const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -225,6 +226,7 @@ export default function Leads() {
   // Fetch soil data when coordinates change
   useEffect(() => {
     if (siteCoordinates) {
+      setIsSoilDataLoading(true);
       const fetchSoilData = async () => {
         try {
           const response = await fetch(`/api/soil-data?lat=${siteCoordinates.lat}&lng=${siteCoordinates.lng}`);
@@ -244,11 +246,14 @@ export default function Leads() {
           }
         } catch (error) {
           console.error("Error fetching soil data:", error);
+        } finally {
+          setIsSoilDataLoading(false);
         }
       };
       fetchSoilData();
     } else {
       setSoilData({ warning: null, notes: null });
+      setIsSoilDataLoading(false);
     }
   }, [siteCoordinates]);
 
@@ -777,10 +782,10 @@ export default function Leads() {
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={createLeadMutation.isPending}
+                  disabled={createLeadMutation.isPending || (siteCoordinates !== null && isSoilDataLoading)}
                   data-testid="button-submit-lead"
                 >
-                  {createLeadMutation.isPending ? "Creating..." : "Create Lead"}
+                  {createLeadMutation.isPending ? "Creating..." : isSoilDataLoading && siteCoordinates ? "Loading soil data..." : "Create Lead"}
                 </Button>
               </div>
             </form>
