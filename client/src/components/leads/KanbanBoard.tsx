@@ -12,6 +12,8 @@ interface QuoteInfo {
   total: number;
   sent: number;
   approved: number;
+  failed: number;
+  drafts: number;
 }
 
 interface Lead {

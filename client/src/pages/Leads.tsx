@@ -52,6 +52,8 @@ interface QuoteInfo {
   total: number;
   sent: number;
   approved: number;
+  failed: number;
+  drafts: number;
 }
 
 interface KanbanLead {
@@ -476,12 +478,14 @@ export default function Leads() {
     return { name: fullName, initials };
   };
 
-  const getQuoteInfo = (leadId: string): { total: number; sent: number; approved: number } => {
+  const getQuoteInfo = (leadId: string): QuoteInfo => {
     const leadQuotes = quotes.filter(q => q.leadId === leadId);
     return {
       total: leadQuotes.length,
       sent: leadQuotes.filter(q => q.status === "sent").length,
       approved: leadQuotes.filter(q => ["approved", "accepted"].includes(q.status as string)).length,
+      failed: leadQuotes.filter(q => q.status === "send_failed").length,
+      drafts: leadQuotes.filter(q => q.status === "draft").length,
     };
   };
 

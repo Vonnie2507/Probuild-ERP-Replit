@@ -47,6 +47,7 @@ export const leadSourceEnum = pgEnum("lead_source", [
 export const quoteStatusEnum = pgEnum("quote_status", [
   "draft",
   "sent",
+  "send_failed",
   "approved",
   "declined",
   "expired",

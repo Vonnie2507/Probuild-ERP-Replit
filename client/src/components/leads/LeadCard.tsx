@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Phone, Mail, MapPin, Clock, MoreHorizontal, Pencil, Trash2, ClipboardList, Send, FileText, Pickaxe, MessageSquare, CheckSquare, User } from "lucide-react";
+import { Phone, Mail, MapPin, Clock, MoreHorizontal, Pencil, Trash2, ClipboardList, Send, FileText, Pickaxe, MessageSquare, CheckSquare, User, AlertTriangle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +21,8 @@ interface QuoteInfo {
   total: number;
   sent: number;
   approved: number;
+  failed: number;
+  drafts: number;
 }
 
 // Soil warning display - only LIMESTONE is red badge, all others are gray text
@@ -245,22 +247,29 @@ export function LeadCard({
                         <FileText className="h-3 w-3 mr-0.5" />
                         {lead.quoteInfo.approved}
                       </Badge>
+                    ) : lead.quoteInfo.failed > 0 ? (
+                      <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">
+                        <AlertTriangle className="h-3 w-3 mr-0.5" />
+                        Failed
+                      </Badge>
                     ) : lead.quoteInfo.sent > 0 ? (
-                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                      <Badge variant="default" className="h-5 px-1.5 text-[10px] bg-warning text-warning-foreground">
                         <Send className="h-3 w-3 mr-0.5" />
                         {lead.quoteInfo.sent}
                       </Badge>
-                    ) : (
+                    ) : lead.quoteInfo.drafts > 0 ? (
                       <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
                         <FileText className="h-3 w-3 mr-0.5" />
-                        {lead.quoteInfo.total}
+                        {lead.quoteInfo.drafts} draft{lead.quoteInfo.drafts !== 1 ? 's' : ''}
                       </Badge>
-                    )}
+                    ) : null}
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>{lead.quoteInfo.total} quote{lead.quoteInfo.total !== 1 ? 's' : ''}</p>
+                  {lead.quoteInfo.drafts > 0 && <p>{lead.quoteInfo.drafts} draft{lead.quoteInfo.drafts !== 1 ? 's' : ''}</p>}
                   {lead.quoteInfo.sent > 0 && <p>{lead.quoteInfo.sent} sent</p>}
+                  {lead.quoteInfo.failed > 0 && <p>{lead.quoteInfo.failed} failed to send</p>}
                   {lead.quoteInfo.approved > 0 && <p>{lead.quoteInfo.approved} approved</p>}
                 </TooltipContent>
               </Tooltip>
