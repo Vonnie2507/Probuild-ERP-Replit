@@ -236,6 +236,8 @@ export const users = pgTable("users", {
   // Staff profile fields
   positionTitle: text("position_title"),
   profilePhotoUrl: text("profile_photo_url"),
+  // Bank card number (last 6 digits) for auto-allocating transactions
+  bankCardNumber: varchar("bank_card_number", { length: 6 }),
 });
 
 // Staff Leave Balances table
@@ -2048,6 +2050,13 @@ export const bankTransactions = pgTable("bank_transactions", {
   runningBalance: decimal("running_balance", { precision: 15, scale: 2 }),
   rawData: jsonb("raw_data"),
   importedAt: timestamp("imported_at").defaultNow().notNull(),
+  // Staff allocation - auto or manual assignment
+  allocatedStaffId: varchar("allocated_staff_id").references(() => users.id),
+  allocatedJobId: varchar("allocated_job_id").references(() => jobs.id),
+  expenseCategoryId: varchar("expense_category_id"),
+  cardNumberUsed: varchar("card_number_used", { length: 10 }),
+  allocationNotes: text("allocation_notes"),
+  receiptId: varchar("receipt_id"),
 });
 
 // Insert schemas for banking
@@ -2353,3 +2362,65 @@ export const insertCallCoachingPromptSchema = createInsertSchema(callCoachingPro
 
 export type InsertCallCoachingPrompt = z.infer<typeof insertCallCoachingPromptSchema>;
 export type CallCoachingPrompt = typeof callCoachingPrompts.$inferSelect;
+
+// ==================== BANKING STAFF & EXPENSE TRACKING ====================
+
+// Expense Categories - configurable categories for transactions
+export const expenseCategories = pgTable("expense_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(),
+  icon: varchar("icon", { length: 50 }),
+  color: varchar("color", { length: 50 }),
+  isDefault: boolean("is_default").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertExpenseCategorySchema = createInsertSchema(expenseCategories).omit({ 
+  id: true, 
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertExpenseCategory = z.infer<typeof insertExpenseCategorySchema>;
+export type ExpenseCategory = typeof expenseCategories.$inferSelect;
+
+// Receipt submission status enum
+export const receiptStatusEnum = pgEnum("receipt_status", [
+  "pending",
+  "reviewed",
+  "matched",
+  "rejected"
+]);
+
+// Receipt Submissions - staff can upload receipts via shareable link
+export const receiptSubmissions = pgTable("receipt_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submittedByStaffId: varchar("submitted_by_staff_id").references(() => users.id),
+  submitterName: varchar("submitter_name", { length: 200 }),
+  photoUrl: text("photo_url").notNull(),
+  expenseCategoryId: varchar("expense_category_id").references(() => expenseCategories.id),
+  allocatedJobId: varchar("allocated_job_id").references(() => jobs.id),
+  noJobAllocation: boolean("no_job_allocation").default(false),
+  amount: decimal("amount", { precision: 15, scale: 2 }),
+  notes: text("notes"),
+  status: receiptStatusEnum("status").default("pending").notNull(),
+  matchedTransactionId: varchar("matched_transaction_id"),
+  reviewedByUserId: varchar("reviewed_by_user_id").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  submissionToken: varchar("submission_token", { length: 100 }).notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertReceiptSubmissionSchema = createInsertSchema(receiptSubmissions).omit({ 
+  id: true, 
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertReceiptSubmission = z.infer<typeof insertReceiptSubmissionSchema>;
+export type ReceiptSubmission = typeof receiptSubmissions.$inferSelect;

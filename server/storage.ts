@@ -13,6 +13,7 @@ import {
   leadActivities, leadTasks, staffLeaveBalances,
   bankConnections, bankAccounts, bankTransactions,
   jobPipelines, jobPipelineStages,
+  expenseCategories, receiptSubmissions,
   type User, type InsertUser,
   type StaffLeaveBalance, type InsertStaffLeaveBalance,
   type Client, type InsertClient,
@@ -81,6 +82,8 @@ import {
   type SalesChecklistItem, type InsertSalesChecklistItem,
   type CallChecklistStatus, type InsertCallChecklistStatus,
   type CallCoachingPrompt, type InsertCallCoachingPrompt,
+  type ExpenseCategory, type InsertExpenseCategory,
+  type ReceiptSubmission, type InsertReceiptSubmission,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -544,6 +547,28 @@ export interface IStorage {
   getBankTransactionById(id: string): Promise<BankTransaction | undefined>;
   createBankTransaction(transaction: InsertBankTransaction): Promise<BankTransaction>;
   createBankTransactions(transactions: InsertBankTransaction[]): Promise<BankTransaction[]>;
+  updateBankTransaction(id: string, transaction: Partial<InsertBankTransaction>): Promise<BankTransaction | undefined>;
+  getTransactionsByStaff(staffId: string, filters?: TransactionFilters): Promise<BankTransaction[]>;
+  getStaffTransactionSummary(): Promise<{ staffId: string; staffName: string; totalSpent: number; transactionCount: number }[]>;
+  autoAllocateTransactionsByCardNumber(): Promise<number>;
+
+  // Expense Categories
+  getExpenseCategories(): Promise<ExpenseCategory[]>;
+  getActiveExpenseCategories(): Promise<ExpenseCategory[]>;
+  getExpenseCategory(id: string): Promise<ExpenseCategory | undefined>;
+  createExpenseCategory(category: InsertExpenseCategory): Promise<ExpenseCategory>;
+  updateExpenseCategory(id: string, category: Partial<InsertExpenseCategory>): Promise<ExpenseCategory | undefined>;
+  deleteExpenseCategory(id: string): Promise<boolean>;
+
+  // Receipt Submissions
+  getReceiptSubmissions(filters?: { status?: string }): Promise<ReceiptSubmission[]>;
+  getReceiptSubmission(id: string): Promise<ReceiptSubmission | undefined>;
+  getReceiptSubmissionByToken(token: string): Promise<ReceiptSubmission | undefined>;
+  createReceiptSubmission(submission: InsertReceiptSubmission): Promise<ReceiptSubmission>;
+  updateReceiptSubmission(id: string, submission: Partial<InsertReceiptSubmission>): Promise<ReceiptSubmission | undefined>;
+  deleteReceiptSubmission(id: string): Promise<boolean>;
+  getPendingReceipts(): Promise<ReceiptSubmission[]>;
+  matchReceiptToTransaction(receiptId: string, transactionId: string, reviewedBy: string): Promise<boolean>;
 
   // ============================================
   // JOB PIPELINE CONFIGURATION
@@ -3481,6 +3506,181 @@ export class DatabaseStorage implements IStorage {
     if (transactions.length === 0) return [];
     const result = await db.insert(bankTransactions).values(transactions).returning();
     return result;
+  }
+
+  async updateBankTransaction(id: string, transaction: Partial<InsertBankTransaction>): Promise<BankTransaction | undefined> {
+    const [updated] = await db.update(bankTransactions)
+      .set(transaction)
+      .where(eq(bankTransactions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getTransactionsByStaff(staffId: string, filters?: TransactionFilters): Promise<BankTransaction[]> {
+    const conditions: any[] = [eq(bankTransactions.allocatedStaffId, staffId)];
+    
+    if (filters?.fromDate) {
+      conditions.push(gte(bankTransactions.postDate, new Date(filters.fromDate)));
+    }
+    if (filters?.toDate) {
+      conditions.push(lte(bankTransactions.postDate, new Date(filters.toDate)));
+    }
+    if (filters?.category) {
+      conditions.push(eq(bankTransactions.expenseCategoryId, filters.category));
+    }
+    if (filters?.direction) {
+      conditions.push(eq(bankTransactions.direction, filters.direction));
+    }
+
+    return db.select().from(bankTransactions)
+      .where(and(...conditions))
+      .orderBy(desc(bankTransactions.postDate))
+      .limit(filters?.limit || 100);
+  }
+
+  async getStaffTransactionSummary(): Promise<{ staffId: string; staffName: string; totalSpent: number; transactionCount: number }[]> {
+    const result = await db.select({
+      staffId: bankTransactions.allocatedStaffId,
+      totalSpent: sql<string>`COALESCE(SUM(CASE WHEN ${bankTransactions.direction} = 'debit' THEN ABS(${bankTransactions.amount}::numeric) ELSE 0 END), 0)`,
+      transactionCount: sql<string>`COUNT(*)`,
+    })
+    .from(bankTransactions)
+    .where(isNotNull(bankTransactions.allocatedStaffId))
+    .groupBy(bankTransactions.allocatedStaffId);
+
+    const staffIds = result.map(r => r.staffId).filter(Boolean) as string[];
+    if (staffIds.length === 0) return [];
+
+    const staffUsers = await db.select().from(users).where(inArray(users.id, staffIds));
+    const staffMap = new Map(staffUsers.map(u => [u.id, `${u.firstName} ${u.lastName}`]));
+
+    return result.map(r => ({
+      staffId: r.staffId!,
+      staffName: staffMap.get(r.staffId!) || 'Unknown',
+      totalSpent: parseFloat(r.totalSpent) || 0,
+      transactionCount: parseInt(r.transactionCount) || 0,
+    }));
+  }
+
+  async autoAllocateTransactionsByCardNumber(): Promise<number> {
+    const staffWithCards = await db.select().from(users).where(isNotNull(users.bankCardNumber));
+    if (staffWithCards.length === 0) return 0;
+
+    let allocated = 0;
+    for (const staff of staffWithCards) {
+      if (!staff.bankCardNumber) continue;
+      
+      const result = await db.update(bankTransactions)
+        .set({ 
+          allocatedStaffId: staff.id,
+          cardNumberUsed: staff.bankCardNumber 
+        })
+        .where(and(
+          isNull(bankTransactions.allocatedStaffId),
+          ilike(bankTransactions.description, `%${staff.bankCardNumber}%`)
+        ))
+        .returning();
+      
+      allocated += result.length;
+    }
+    return allocated;
+  }
+
+  // Expense Categories
+  async getExpenseCategories(): Promise<ExpenseCategory[]> {
+    return db.select().from(expenseCategories).orderBy(expenseCategories.sortOrder);
+  }
+
+  async getActiveExpenseCategories(): Promise<ExpenseCategory[]> {
+    return db.select().from(expenseCategories)
+      .where(eq(expenseCategories.isActive, true))
+      .orderBy(expenseCategories.sortOrder);
+  }
+
+  async getExpenseCategory(id: string): Promise<ExpenseCategory | undefined> {
+    const [category] = await db.select().from(expenseCategories).where(eq(expenseCategories.id, id));
+    return category;
+  }
+
+  async createExpenseCategory(category: InsertExpenseCategory): Promise<ExpenseCategory> {
+    const [created] = await db.insert(expenseCategories).values(category).returning();
+    return created;
+  }
+
+  async updateExpenseCategory(id: string, category: Partial<InsertExpenseCategory>): Promise<ExpenseCategory | undefined> {
+    const [updated] = await db.update(expenseCategories)
+      .set({ ...category, updatedAt: new Date() })
+      .where(eq(expenseCategories.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteExpenseCategory(id: string): Promise<boolean> {
+    const result = await db.delete(expenseCategories).where(eq(expenseCategories.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Receipt Submissions
+  async getReceiptSubmissions(filters?: { status?: string }): Promise<ReceiptSubmission[]> {
+    if (filters?.status) {
+      return db.select().from(receiptSubmissions)
+        .where(eq(receiptSubmissions.status, filters.status as any))
+        .orderBy(desc(receiptSubmissions.createdAt));
+    }
+    return db.select().from(receiptSubmissions).orderBy(desc(receiptSubmissions.createdAt));
+  }
+
+  async getReceiptSubmission(id: string): Promise<ReceiptSubmission | undefined> {
+    const [receipt] = await db.select().from(receiptSubmissions).where(eq(receiptSubmissions.id, id));
+    return receipt;
+  }
+
+  async getReceiptSubmissionByToken(token: string): Promise<ReceiptSubmission | undefined> {
+    const [receipt] = await db.select().from(receiptSubmissions)
+      .where(eq(receiptSubmissions.submissionToken, token));
+    return receipt;
+  }
+
+  async createReceiptSubmission(submission: InsertReceiptSubmission): Promise<ReceiptSubmission> {
+    const [created] = await db.insert(receiptSubmissions).values(submission).returning();
+    return created;
+  }
+
+  async updateReceiptSubmission(id: string, submission: Partial<InsertReceiptSubmission>): Promise<ReceiptSubmission | undefined> {
+    const [updated] = await db.update(receiptSubmissions)
+      .set({ ...submission, updatedAt: new Date() })
+      .where(eq(receiptSubmissions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteReceiptSubmission(id: string): Promise<boolean> {
+    const result = await db.delete(receiptSubmissions).where(eq(receiptSubmissions.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getPendingReceipts(): Promise<ReceiptSubmission[]> {
+    return db.select().from(receiptSubmissions)
+      .where(eq(receiptSubmissions.status, 'pending'))
+      .orderBy(desc(receiptSubmissions.createdAt));
+  }
+
+  async matchReceiptToTransaction(receiptId: string, transactionId: string, reviewedBy: string): Promise<boolean> {
+    await db.update(receiptSubmissions)
+      .set({ 
+        matchedTransactionId: transactionId, 
+        status: 'matched',
+        reviewedByUserId: reviewedBy,
+        reviewedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(receiptSubmissions.id, receiptId));
+    
+    await db.update(bankTransactions)
+      .set({ receiptId })
+      .where(eq(bankTransactions.id, transactionId));
+    
+    return true;
   }
 
   // ============================================
