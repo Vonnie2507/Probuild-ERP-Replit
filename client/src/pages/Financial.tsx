@@ -824,8 +824,17 @@ export default function Financial() {
     enabled: isAdmin,
   });
 
+  // Build the transactions URL with query parameters
+  const transactionsUrl = (() => {
+    const params = new URLSearchParams();
+    if (searchQuery) params.set("search", searchQuery);
+    if (directionFilter !== "all") params.set("direction", directionFilter);
+    const queryString = params.toString();
+    return queryString ? `/api/financial/transactions?${queryString}` : "/api/financial/transactions";
+  })();
+  
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery<BankTransaction[]>({
-    queryKey: ["/api/financial/transactions", { search: searchQuery, direction: directionFilter !== "all" ? directionFilter : undefined }],
+    queryKey: [transactionsUrl],
   });
 
   const syncMutation = useMutation({
@@ -834,7 +843,9 @@ export default function Financial() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/financial/accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/financial/transactions"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/financial/transactions')
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/financial/overview"] });
       toast({ title: "Sync Complete", description: "Transactions have been synced successfully." });
     },
@@ -919,7 +930,9 @@ export default function Financial() {
       return res.json();
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/financial/transactions"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/financial/transactions')
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/financial/overview"] });
       
       const hasErrors = data.errors && data.errors.length > 0;
