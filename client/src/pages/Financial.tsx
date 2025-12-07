@@ -572,38 +572,24 @@ function StaffExpensesTab() {
             ) : staffTransactions.length === 0 ? (
               <p className="text-center text-muted-foreground py-4">No transactions found</p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {staffTransactions.map((tx) => (
-                    <TableRow key={tx.id}>
-                      <TableCell className="text-sm">
-                        {tx.postDate ? format(new Date(tx.postDate), "dd MMM yyyy") : "-"}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium text-sm truncate max-w-[200px]">
-                          {tx.merchantName || tx.description}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {tx.category || "Uncategorized"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className={`text-right font-medium ${tx.direction === 'debit' ? 'text-red-600' : 'text-green-600'}`}>
-                        {tx.direction === 'debit' ? '-' : '+'}{formatCurrency(Math.abs(parseFloat(tx.amount || '0')))}
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table className="text-sm">
+                  <TableHeader>
+                    <TableRow className="text-xs">
+                      <TableHead className="py-2 w-[80px]">Date</TableHead>
+                      <TableHead className="py-2 min-w-[300px]">Description</TableHead>
+                      <TableHead className="py-2 w-[120px]">Category</TableHead>
+                      <TableHead className="py-2 w-[120px]">Staff</TableHead>
+                      <TableHead className="py-2 text-right w-[100px]">Amount</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {staffTransactions.map((tx) => (
+                      <TransactionRowCompact key={tx.id} transaction={tx} />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
