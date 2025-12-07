@@ -477,6 +477,28 @@ function StaffExpensesTab() {
     },
   });
 
+  const autoCategorizeMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", "/api/financial/auto-categorize");
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Auto-Categorize Complete",
+        description: data.message || `Categorized ${data.categorizedCount} transactions`,
+      });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/financial')
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Auto-Categorize Failed",
+        description: error.message || "Could not auto-categorize transactions",
+        variant: "destructive",
+      });
+    },
+  });
+
   if (summaryLoading) {
     return (
       <div className="space-y-4">
@@ -500,18 +522,33 @@ function StaffExpensesTab() {
             View and allocate transactions by staff member
           </p>
         </div>
-        <Button
-          onClick={() => autoAllocateMutation.mutate()}
-          disabled={autoAllocateMutation.isPending}
-          data-testid="button-auto-allocate"
-        >
-          {autoAllocateMutation.isPending ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4 mr-2" />
-          )}
-          Auto-Allocate by Card
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => autoCategorizeMutation.mutate()}
+            disabled={autoCategorizeMutation.isPending}
+            variant="outline"
+            data-testid="button-auto-categorize"
+          >
+            {autoCategorizeMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Tag className="h-4 w-4 mr-2" />
+            )}
+            Auto-Categorize
+          </Button>
+          <Button
+            onClick={() => autoAllocateMutation.mutate()}
+            disabled={autoAllocateMutation.isPending}
+            data-testid="button-auto-allocate"
+          >
+            {autoAllocateMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Auto-Allocate by Card
+          </Button>
+        </div>
       </div>
 
       {staffSummary.length === 0 ? (
