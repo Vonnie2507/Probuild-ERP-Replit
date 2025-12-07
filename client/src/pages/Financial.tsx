@@ -22,6 +22,14 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
+  Users,
+  Receipt,
+  Eye,
+  Link2,
+  Copy,
+  UserCircle,
+  Calendar,
+  Tag,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -313,6 +321,434 @@ function ConnectionCard({ connection, onRefresh }: { connection: BankConnection;
   );
 }
 
+// Staff transaction summary interface
+interface StaffSummary {
+  staffId: string;
+  staffName: string;
+  totalSpent: number;
+  transactionCount: number;
+}
+
+// Staff Expenses Tab Component
+function StaffExpensesTab() {
+  const { toast } = useToast();
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  
+  const { data: staffSummary = [], isLoading: summaryLoading } = useQuery<StaffSummary[]>({
+    queryKey: ["/api/financial/staff-summary"],
+  });
+  
+  const { data: staffTransactions = [], isLoading: transactionsLoading } = useQuery<BankTransaction[]>({
+    queryKey: ["/api/financial/staff", selectedStaffId, "transactions"],
+    enabled: !!selectedStaffId,
+  });
+
+  const autoAllocateMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("/api/financial/auto-allocate", { method: "POST" });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Auto-Allocation Complete",
+        description: data.message || `Allocated ${data.allocatedCount} transactions`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/financial/staff-summary"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Auto-Allocation Failed",
+        description: error.message || "Could not auto-allocate transactions",
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (summaryLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-12 w-full" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-32" />)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Staff Expenses
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            View and allocate transactions by staff member
+          </p>
+        </div>
+        <Button
+          onClick={() => autoAllocateMutation.mutate()}
+          disabled={autoAllocateMutation.isPending}
+          data-testid="button-auto-allocate"
+        >
+          {autoAllocateMutation.isPending ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4 mr-2" />
+          )}
+          Auto-Allocate by Card
+        </Button>
+      </div>
+
+      {staffSummary.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center py-8 text-muted-foreground">
+              <UserCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="font-medium">No Staff Allocations Yet</p>
+              <p className="text-sm mt-1">
+                Assign staff bank card numbers to auto-allocate transactions, or manually allocate them.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {staffSummary.map((staff) => (
+            <Card 
+              key={staff.staffId}
+              className={`cursor-pointer hover-elevate transition-all ${selectedStaffId === staff.staffId ? 'ring-2 ring-primary' : ''}`}
+              onClick={() => setSelectedStaffId(selectedStaffId === staff.staffId ? null : staff.staffId)}
+              data-testid={`card-staff-${staff.staffId}`}
+            >
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                    <UserCircle className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium">{staff.staffName}</h4>
+                    <p className="text-xs text-muted-foreground">
+                      {staff.transactionCount} transaction{staff.transactionCount !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-lg">{formatCurrency(staff.totalSpent)}</p>
+                    <p className="text-xs text-muted-foreground">Total spent</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {selectedStaffId && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Transactions for {staffSummary.find(s => s.staffId === selectedStaffId)?.staffName}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {transactionsLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-12" />)}
+              </div>
+            ) : staffTransactions.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4">No transactions found</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {staffTransactions.map((tx) => (
+                    <TableRow key={tx.id}>
+                      <TableCell className="text-sm">
+                        {tx.postDate ? format(new Date(tx.postDate), "dd MMM yyyy") : "-"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium text-sm truncate max-w-[200px]">
+                          {tx.merchantName || tx.description}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {tx.category || "Uncategorized"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className={`text-right font-medium ${tx.direction === 'debit' ? 'text-red-600' : 'text-green-600'}`}>
+                        {tx.direction === 'debit' ? '-' : '+'}{formatCurrency(Math.abs(parseFloat(tx.amount || '0')))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// Receipt Inbox Tab Component
+interface ReceiptSubmission {
+  id: string;
+  staffId: string | null;
+  imageUrl: string | null;
+  photoUrl: string | null;
+  expenseCategoryId: string | null;
+  actualAmount: string | null;
+  amount: string | null;
+  merchantName: string | null;
+  purchaseDate: string | null;
+  notes: string | null;
+  status: string;
+  submissionToken: string;
+  submittedAt: string | null;
+  createdAt: string;
+}
+
+function ReceiptInboxTab() {
+  const { toast } = useToast();
+  const [selectedReceipt, setSelectedReceipt] = useState<ReceiptSubmission | null>(null);
+  const [showCreateLinkDialog, setShowCreateLinkDialog] = useState(false);
+  const [linkDescription, setLinkDescription] = useState("");
+  const [linkAmount, setLinkAmount] = useState("");
+
+  const { data: receipts = [], isLoading: receiptsLoading } = useQuery<ReceiptSubmission[]>({
+    queryKey: ["/api/receipts"],
+  });
+
+  const { data: pendingReceipts = [] } = useQuery<ReceiptSubmission[]>({
+    queryKey: ["/api/receipts/pending"],
+  });
+
+  const createLinkMutation = useMutation({
+    mutationFn: async (data: { description: string; amount?: string }) => {
+      return apiRequest("/api/receipts/create-link", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Receipt Link Created",
+        description: "Share this link with your staff member to upload their receipt.",
+      });
+      // Copy URL to clipboard
+      if (data.submissionUrl) {
+        navigator.clipboard.writeText(data.submissionUrl);
+        toast({
+          title: "Link Copied",
+          description: "The receipt submission link has been copied to your clipboard.",
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/receipts"] });
+      setShowCreateLinkDialog(false);
+      setLinkDescription("");
+      setLinkAmount("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Create Link",
+        description: error.message || "Could not create receipt link",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      pending: "bg-yellow-100 text-yellow-800",
+      submitted: "bg-blue-100 text-blue-800",
+      reviewed: "bg-green-100 text-green-800",
+      matched: "bg-purple-100 text-purple-800",
+      rejected: "bg-red-100 text-red-800",
+    };
+    return styles[status] || "bg-gray-100 text-gray-800";
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <Receipt className="h-5 w-5" />
+            Receipt Inbox
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Review staff receipt submissions and match to transactions
+          </p>
+        </div>
+        <Button
+          onClick={() => setShowCreateLinkDialog(true)}
+          data-testid="button-create-receipt-link"
+        >
+          <Link2 className="h-4 w-4 mr-2" />
+          Create Receipt Link
+        </Button>
+      </div>
+
+      {/* Pending count alert */}
+      {pendingReceipts.length > 0 && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Pending Receipts</AlertTitle>
+          <AlertDescription>
+            You have {pendingReceipts.length} receipt{pendingReceipts.length !== 1 ? 's' : ''} waiting for submission or review.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {receiptsLoading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-16" />)}
+        </div>
+      ) : receipts.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center py-8 text-muted-foreground">
+              <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="font-medium">No Receipts Yet</p>
+              <p className="text-sm mt-1">
+                Create a receipt link to share with staff for uploading receipts.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {receipts.map((receipt) => (
+                <TableRow key={receipt.id} data-testid={`row-receipt-${receipt.id}`}>
+                  <TableCell className="text-sm">
+                    {format(new Date(receipt.createdAt), "dd MMM yyyy")}
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium text-sm truncate max-w-[200px]">
+                      {receipt.merchantName || receipt.notes || "No description"}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {receipt.actualAmount || receipt.amount ? formatCurrency(receipt.actualAmount || receipt.amount) : "-"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={getStatusBadge(receipt.status)}>
+                      {receipt.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      {(receipt.imageUrl || receipt.photoUrl) && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => window.open(receipt.imageUrl || receipt.photoUrl || '', '_blank')}
+                          data-testid={`button-view-receipt-${receipt.id}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {receipt.status === 'pending' && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            const url = `${window.location.origin}/submit-receipt/${receipt.submissionToken}`;
+                            navigator.clipboard.writeText(url);
+                            toast({ title: "Link copied to clipboard" });
+                          }}
+                          data-testid={`button-copy-link-${receipt.id}`}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      {/* Create Receipt Link Dialog */}
+      <Dialog open={showCreateLinkDialog} onOpenChange={setShowCreateLinkDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Receipt Submission Link</DialogTitle>
+            <DialogDescription>
+              Generate a shareable link for staff to upload their receipt photo
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="linkDescription">Description (optional)</Label>
+              <Input
+                id="linkDescription"
+                placeholder="e.g., Fuel receipt for site visit"
+                value={linkDescription}
+                onChange={(e) => setLinkDescription(e.target.value)}
+                data-testid="input-link-description"
+              />
+            </div>
+            <div>
+              <Label htmlFor="linkAmount">Expected Amount (optional)</Label>
+              <Input
+                id="linkAmount"
+                type="number"
+                step="0.01"
+                placeholder="e.g., 85.50"
+                value={linkAmount}
+                onChange={(e) => setLinkAmount(e.target.value)}
+                data-testid="input-link-amount"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateLinkDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createLinkMutation.mutate({
+                description: linkDescription,
+                amount: linkAmount || undefined,
+              })}
+              disabled={createLinkMutation.isPending}
+              data-testid="button-generate-link"
+            >
+              {createLinkMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Link2 className="h-4 w-4 mr-2" />
+              )}
+              Generate Link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function Financial() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -490,6 +926,12 @@ export default function Financial() {
           <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
           <TabsTrigger value="accounts" data-testid="tab-accounts">Accounts ({accounts.length})</TabsTrigger>
           <TabsTrigger value="transactions" data-testid="tab-transactions">Transactions</TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="staff" data-testid="tab-staff">Staff Expenses</TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="receipts" data-testid="tab-receipts">Receipt Inbox</TabsTrigger>
+          )}
           {isAdmin && (
             <TabsTrigger value="connections" data-testid="tab-connections">Connections</TabsTrigger>
           )}
@@ -747,6 +1189,20 @@ export default function Financial() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+        )}
+
+        {/* Staff Expenses Tab */}
+        {isAdmin && (
+          <TabsContent value="staff" className="mt-6 space-y-4">
+            <StaffExpensesTab />
+          </TabsContent>
+        )}
+
+        {/* Receipt Inbox Tab */}
+        {isAdmin && (
+          <TabsContent value="receipts" className="mt-6 space-y-4">
+            <ReceiptInboxTab />
           </TabsContent>
         )}
       </Tabs>
