@@ -1596,7 +1596,7 @@ export default function Financial() {
 
       {/* CSV Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[min(90vw,900px)] max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="h-5 w-5" />
@@ -1607,7 +1607,7 @@ export default function Financial() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto space-y-4">
             <div>
               <Label htmlFor="csv-file" className="text-sm font-medium">CSV File</Label>
               <Input
