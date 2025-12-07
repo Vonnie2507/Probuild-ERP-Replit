@@ -46,6 +46,7 @@ import SalesChecklistConfig from "@/pages/SalesChecklistConfig";
 import Calls from "@/pages/Calls";
 import SubmitReceipt from "@/pages/SubmitReceipt";
 import ExpenseCategoryConfig from "@/pages/ExpenseCategoryConfig";
+import StaffManagement from "@/pages/StaffManagement";
 import { CallWidget } from "@/components/coaching/CallWidget";
 
 function MainLayout({ children }: { children: React.ReactNode }) {
@@ -456,6 +457,13 @@ function AuthenticatedRouter() {
         <ProtectedRoute path="/expense-category-config">
           <MainLayout>
             <ExpenseCategoryConfig />
+          </MainLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/staff-management">
+        <ProtectedRoute path="/staff-management">
+          <MainLayout>
+            <StaffManagement />
           </MainLayout>
         </ProtectedRoute>
       </Route>

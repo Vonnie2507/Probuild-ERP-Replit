@@ -132,6 +132,7 @@ const navigationConfig: NavGroup[] = [
       { title: "Job Stage Config", url: "/job-stage-configuration", icon: GitBranch },
       { title: "Kanban Columns", url: "/kanban-column-settings", icon: Columns3 },
       { title: "Expense Categories", url: "/expense-category-config", icon: Tag },
+      { title: "Staff Management", url: "/staff-management", icon: Users },
     ],
   },
 ];

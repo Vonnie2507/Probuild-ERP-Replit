@@ -45,6 +45,7 @@ export const routePermissions: RouteConfig[] = [
   { path: "/kanban-column-settings", allowedRoles: ["admin"] },
   { path: "/sales-checklist-config", allowedRoles: ["admin"] },
   { path: "/expense-category-config", allowedRoles: ["admin"] },
+  { path: "/staff-management", allowedRoles: ["admin"] },
   { path: "/unauthorized", allowedRoles: allInternalRoles },
 ];
 

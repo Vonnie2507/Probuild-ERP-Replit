@@ -2940,6 +2940,42 @@ export async function registerRoutes(
     }
   });
 
+  // Update user (admin only) - for staff management
+  app.patch("/api/users/:id", requireRoles("admin"), async (req, res) => {
+    try {
+      const updateSchema = z.object({
+        bankCardNumber: z.string().max(6).nullable().optional(),
+        phone: z.string().nullable().optional(),
+        positionTitle: z.string().nullable().optional(),
+        isActive: z.union([z.boolean(), z.string()]).transform(val => {
+          if (typeof val === 'boolean') return val;
+          return val === 'true';
+        }).optional(),
+      });
+      
+      const validatedData = updateSchema.parse(req.body);
+      const { bankCardNumber, phone, positionTitle, isActive } = validatedData;
+      
+      const updateData: Record<string, unknown> = {};
+      if (bankCardNumber !== undefined) updateData.bankCardNumber = bankCardNumber;
+      if (phone !== undefined) updateData.phone = phone;
+      if (positionTitle !== undefined) updateData.positionTitle = positionTitle;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      
+      const user = await storage.updateUser(req.params.id, updateData);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error updating user:", error);
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
   // ============ ACTIVITY LOGS ============
   app.get("/api/activity-logs", async (req, res) => {
     try {
