@@ -5844,6 +5844,21 @@ export async function registerRoutes(
     }
   });
 
+  // Auto-categorize transactions by keyword matching
+  app.post("/api/financial/auto-categorize", requireRoles("admin"), async (req, res) => {
+    try {
+      const count = await storage.autoCategorizeTransactionsByKeywords();
+      res.json({ 
+        success: true, 
+        categorizedCount: count,
+        message: `Auto-categorized ${count} transactions` 
+      });
+    } catch (error) {
+      console.error("Error auto-categorizing transactions:", error);
+      res.status(500).json({ error: "Failed to auto-categorize transactions" });
+    }
+  });
+
   // Import transactions from CSV
   app.post("/api/financial/transactions/import", requireRoles("admin"), async (req, res) => {
     try {

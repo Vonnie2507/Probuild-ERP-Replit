@@ -553,6 +553,7 @@ export interface IStorage {
   getTransactionsByStaff(staffId: string, filters?: TransactionFilters): Promise<BankTransaction[]>;
   getStaffTransactionSummary(): Promise<{ staffId: string; staffName: string; totalSpent: number; transactionCount: number }[]>;
   autoAllocateTransactionsByCardNumber(): Promise<number>;
+  autoCategorizeTransactionsByKeywords(): Promise<number>;
 
   // Expense Categories
   getExpenseCategories(): Promise<ExpenseCategory[]>;
@@ -3604,6 +3605,50 @@ export class DatabaseStorage implements IStorage {
       allocated += result.length;
     }
     return allocated;
+  }
+
+  async autoCategorizeTransactionsByKeywords(): Promise<number> {
+    // Get all active expense categories with keywords
+    const categoriesWithKeywords = await db.select()
+      .from(expenseCategories)
+      .where(and(
+        eq(expenseCategories.isActive, true),
+        isNotNull(expenseCategories.keywords)
+      ));
+    
+    if (categoriesWithKeywords.length === 0) return 0;
+
+    // Get uncategorized transactions
+    const uncategorizedTxs = await db.select()
+      .from(bankTransactions)
+      .where(isNull(bankTransactions.expenseCategoryId));
+    
+    let categorized = 0;
+    
+    for (const tx of uncategorizedTxs) {
+      const description = (tx.description || '').toLowerCase();
+      const merchantName = (tx.merchantName || '').toLowerCase();
+      const searchText = `${description} ${merchantName}`;
+      
+      // Find matching category by keywords
+      for (const category of categoriesWithKeywords) {
+        if (!category.keywords || category.keywords.length === 0) continue;
+        
+        const hasMatch = category.keywords.some((keyword: string) => 
+          searchText.includes(keyword.toLowerCase())
+        );
+        
+        if (hasMatch) {
+          await db.update(bankTransactions)
+            .set({ expenseCategoryId: category.id })
+            .where(eq(bankTransactions.id, tx.id));
+          categorized++;
+          break; // Only assign first matching category
+        }
+      }
+    }
+    
+    return categorized;
   }
 
   // Expense Categories
