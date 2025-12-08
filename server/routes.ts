@@ -71,18 +71,34 @@ export async function registerRoutes(
       status: "ok", 
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV,
-      service: "Probuild ERP"
+      service: "Probuild ERP",
+      port: process.env.PORT || "5000",
+      nodeVersion: process.version
     });
   });
 
-  app.get("/api/health", (req, res) => {
-    res.status(200).json({ 
-      status: "ok", 
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV,
-      database: "connected",
-      service: "Probuild ERP"
-    });
+  app.get("/api/health", async (req, res) => {
+    try {
+      // Test database connection
+      await storage.getUsers();
+      res.status(200).json({ 
+        status: "ok", 
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV,
+        database: "connected",
+        service: "Probuild ERP",
+        port: process.env.PORT || "5000"
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        status: "error", 
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV,
+        database: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+        service: "Probuild ERP"
+      });
+    }
   });
   
   // ============ AUTHENTICATION ============
