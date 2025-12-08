@@ -1,0 +1,8 @@
+node_modules/
+.git/
+.replit
+replit.md
+attached_assets/
+core
+*.md
+.gitignore
