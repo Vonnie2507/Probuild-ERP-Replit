@@ -77,6 +77,36 @@ export async function registerRoutes(
     });
   });
 
+  // ============ TEMPORARY SEED ENDPOINT ============
+  // WARNING: Remove this in production! Only for initial setup.
+  app.post("/api/seed-database-initial-setup", async (req, res) => {
+    try {
+      // Check if users already exist
+      const existingUsers = await storage.getUsers();
+      if (existingUsers.length > 0) {
+        return res.status(400).json({ 
+          error: "Database already has users. Seeding skipped to prevent duplicates.",
+          userCount: existingUsers.length
+        });
+      }
+
+      // Run seed script content inline
+      const { execSync } = await import("child_process");
+      execSync("npm run db:seed", { stdio: "inherit" });
+
+      res.status(200).json({ 
+        success: true, 
+        message: "Database seeded successfully! You can now login with: vonnie@probuildpvc.com.au / password123"
+      });
+    } catch (error) {
+      console.error("Seed error:", error);
+      res.status(500).json({ 
+        error: "Failed to seed database", 
+        details: error instanceof Error ? error.message : "Unknown error" 
+      });
+    }
+  });
+
   app.get("/api/health", async (req, res) => {
     try {
       // Test database connection
