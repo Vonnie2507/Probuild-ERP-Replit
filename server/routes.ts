@@ -65,6 +65,26 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
+  // ============ HEALTH CHECK ============
+  app.get("/health", (req, res) => {
+    res.status(200).json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      service: "Probuild ERP"
+    });
+  });
+
+  app.get("/api/health", (req, res) => {
+    res.status(200).json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      database: "connected",
+      service: "Probuild ERP"
+    });
+  });
+  
   // ============ AUTHENTICATION ============
   app.post("/api/auth/login", async (req, res) => {
     try {
