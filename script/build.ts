@@ -22,14 +22,18 @@ const allowlist = [
   "nanoid",
   "nodemailer",
   "openai",
+  "openid-client",
   "passport",
   "passport-local",
   "stripe",
+  "stripe-replit-sync",
+  "twilio",
   "uuid",
   "ws",
   "xlsx",
   "zod",
   "zod-validation-error",
+  "memoizee",
 ];
 
 async function buildAll() {
