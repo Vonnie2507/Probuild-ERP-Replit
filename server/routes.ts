@@ -64,108 +64,12 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
+
   // ============ HEALTH CHECK ============
-  app.get("/health", (req, res) => {
-    res.status(200).json({ 
-      status: "ok", 
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV,
-      service: "Probuild ERP",
-      port: process.env.PORT || "5000",
-      nodeVersion: process.version
-    });
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // ============ DIAGNOSTIC ENDPOINT ============
-  app.get("/api/check-users", async (req, res) => {
-    try {
-      const users = await storage.getUsers();
-      res.json({ 
-        userCount: users.length,
-        users: users.map(u => ({ 
-          email: u.email, 
-          username: u.username, 
-          role: u.role,
-          isActive: u.isActive 
-        }))
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        error: "Failed to check users", 
-        details: error instanceof Error ? error.message : "Unknown error" 
-      });
-    }
-  });
-
-  // ============ TEMPORARY SEED ENDPOINT ============
-  // WARNING: Remove this in production! Only for initial setup.
-  app.get("/api/seed-database-now", async (req, res) => {
-    try {
-      // Check if users already exist
-      const existingUsers = await storage.getUsers();
-      if (existingUsers.length > 0) {
-        return res.status(400).json({ 
-          error: "Database already has users. Seeding skipped to prevent duplicates.",
-          userCount: existingUsers.length,
-          hint: "Visit /api/check-users to see existing users"
-        });
-      }
-
-      // Create admin user directly
-      const adminUser = await storage.createUser({
-        username: "vonnie",
-        password: "password123",
-        email: "vonnie@probuildpvc.com.au",
-        firstName: "Vonnie",
-        lastName: "Bradley",
-        phone: "0412 345 678",
-        role: "admin",
-        isActive: true,
-      });
-
-      res.status(200).json({ 
-        success: true, 
-        message: "Admin user created! Login with: vonnie@probuildpvc.com.au / password123",
-        user: {
-          email: adminUser.email,
-          username: adminUser.username,
-          role: adminUser.role
-        }
-      });
-    } catch (error) {
-      console.error("Seed error:", error);
-      res.status(500).json({ 
-        error: "Failed to create user", 
-        details: error instanceof Error ? error.message : "Unknown error" 
-      });
-    }
-  });
-
-  app.get("/api/health", async (req, res) => {
-    try {
-      // Test database connection
-      await storage.getUsers();
-      res.status(200).json({ 
-        status: "ok", 
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV,
-        database: "connected",
-        service: "Probuild ERP",
-        port: process.env.PORT || "5000"
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        status: "error", 
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV,
-        database: "error",
-        error: error instanceof Error ? error.message : "Unknown error",
-        service: "Probuild ERP"
-      });
-    }
-  });
-  
   // ============ AUTHENTICATION ============
   app.post("/api/auth/login", async (req, res) => {
     try {
