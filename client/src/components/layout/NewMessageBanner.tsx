@@ -2,12 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { MessageSquare, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useNotificationSound } from "@/hooks/use-notification-sound";
 
 export function NewMessageBanner() {
   const [location, navigate] = useLocation();
   const [dismissed, setDismissed] = useState(false);
   const [lastCount, setLastCount] = useState(0);
+  const isInitialMount = useRef(true);
+  const { playSound } = useNotificationSound();
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ['/api/sms/unread-count'],
@@ -17,11 +20,20 @@ export function NewMessageBanner() {
   const unreadCount = unreadData?.count || 0;
 
   useEffect(() => {
-    if (unreadCount > lastCount && lastCount > 0) {
+    // Skip playing sound on initial load
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      setLastCount(unreadCount);
+      return;
+    }
+
+    // Play notification sound when new messages arrive
+    if (unreadCount > lastCount) {
       setDismissed(false);
+      playSound();
     }
     setLastCount(unreadCount);
-  }, [unreadCount, lastCount]);
+  }, [unreadCount, lastCount, playSound]);
 
   if (location === '/messages' || dismissed || unreadCount === 0) {
     return null;
