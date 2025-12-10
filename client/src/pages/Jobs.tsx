@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AddressAutocomplete, SitePreview } from "@/components/ui/address-autocomplete";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JobCard } from "@/components/jobs/JobCard";
@@ -53,6 +54,11 @@ import {
   Pencil,
   Trash2,
   Download,
+  MessageSquare,
+  History,
+  Loader2,
+  PhoneCall,
+  Clock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -600,7 +606,7 @@ export default function Jobs() {
             </div>
 
             <Tabs defaultValue="details">
-              <TabsList>
+              <TabsList className="flex flex-wrap h-auto gap-1">
                 <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
                 <TabsTrigger value="timeline" data-testid="tab-timeline">Timeline</TabsTrigger>
                 {selectedJob.jobType === "supply_install" && (
@@ -609,6 +615,14 @@ export default function Jobs() {
                 <TabsTrigger value="materials" data-testid="tab-materials">Materials</TabsTrigger>
                 <TabsTrigger value="documents" data-testid="tab-documents">Documents</TabsTrigger>
                 <TabsTrigger value="photos" data-testid="tab-photos">Photos</TabsTrigger>
+                <TabsTrigger value="communications" data-testid="tab-communications">
+                  <MessageSquare className="h-3 w-3 mr-1" />
+                  Communications
+                </TabsTrigger>
+                <TabsTrigger value="servicem8-history" data-testid="tab-servicem8-history">
+                  <History className="h-3 w-3 mr-1" />
+                  ServiceM8 History
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="details" className="space-y-6 mt-6">
@@ -630,6 +644,8 @@ export default function Jobs() {
                         <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                         <span>{selectedJob.address}</span>
                       </div>
+                      {/* Street View Preview */}
+                      <SitePreview address={selectedJob.address} />
                     </CardContent>
                   </Card>
 
@@ -815,6 +831,142 @@ export default function Jobs() {
                   </CardContent>
                 </Card>
               </TabsContent>
+
+              {/* Communications Tab - SMS, Calls, Recordings */}
+              <TabsContent value="communications" className="mt-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      Client Communications
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* SMS Messages */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-medium flex items-center gap-2">
+                          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                          SMS Messages
+                        </h4>
+                        <Button size="sm" variant="outline">
+                          Send SMS
+                        </Button>
+                      </div>
+                      <div className="text-center py-6 border rounded-lg bg-muted/30">
+                        <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm text-muted-foreground">No SMS messages yet</p>
+                        <p className="text-xs text-muted-foreground">Messages with this client will appear here</p>
+                      </div>
+                    </div>
+
+                    {/* Call History */}
+                    <div className="space-y-3 pt-4 border-t">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-medium flex items-center gap-2">
+                          <PhoneCall className="h-4 w-4 text-muted-foreground" />
+                          Call History
+                        </h4>
+                        <Button size="sm" variant="outline">
+                          Log Call
+                        </Button>
+                      </div>
+                      <div className="text-center py-6 border rounded-lg bg-muted/30">
+                        <PhoneCall className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm text-muted-foreground">No calls recorded</p>
+                        <p className="text-xs text-muted-foreground">Call logs and recordings will appear here</p>
+                      </div>
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="flex gap-2 pt-4 border-t">
+                      <Button size="sm" className="flex-1">
+                        <Phone className="h-4 w-4 mr-2" />
+                        Call Client
+                      </Button>
+                      <Button size="sm" variant="outline" className="flex-1">
+                        <Mail className="h-4 w-4 mr-2" />
+                        Send Email
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* ServiceM8 History Tab - Historical notes imported from ServiceM8 */}
+              <TabsContent value="servicem8-history" className="mt-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <History className="h-4 w-4" />
+                      ServiceM8 History
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {(selectedJob as any).servicem8Uuid ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                          <div>
+                            <p className="text-sm font-medium">ServiceM8 Reference</p>
+                            <p className="text-xs text-muted-foreground font-mono">
+                              {(selectedJob as any).servicem8Uuid}
+                            </p>
+                          </div>
+                          <Badge variant="outline">Synced</Badge>
+                        </div>
+
+                        {/* Historical Notes Section */}
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-medium flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            Historical Notes
+                          </h4>
+                          <div className="text-center py-6 border rounded-lg bg-muted/30">
+                            <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm text-muted-foreground">No historical notes imported</p>
+                            <p className="text-xs text-muted-foreground">
+                              Run a ServiceM8 sync from the Import Center to fetch notes
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* ServiceM8 Details */}
+                        {(selectedJob as any).servicem8JobId && (
+                          <div className="space-y-2 p-3 border rounded-lg">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">ServiceM8 Job ID</span>
+                              <span className="font-mono">{(selectedJob as any).servicem8JobId}</span>
+                            </div>
+                            {(selectedJob as any).servicem8Status && (
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Original Status</span>
+                                <Badge variant="secondary">{(selectedJob as any).servicem8Status}</Badge>
+                              </div>
+                            )}
+                            {(selectedJob as any).servicem8SyncedAt && (
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Last Synced</span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {new Date((selectedJob as any).servicem8SyncedAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                        <p className="text-sm">No ServiceM8 data linked</p>
+                        <p className="text-xs">
+                          This job was not imported from ServiceM8 or hasn't been synced
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
             </Tabs>
           </div>
         ) : (
@@ -836,12 +988,12 @@ export default function Jobs() {
           <form onSubmit={handleSubmitEdit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-siteAddress">Site Address</Label>
-              <Input 
-                id="edit-siteAddress" 
-                placeholder="Enter site address" 
+              <AddressAutocomplete
                 value={formData.siteAddress}
-                onChange={(e) => setFormData({ ...formData, siteAddress: e.target.value })}
-                data-testid="input-edit-job-address" 
+                onChange={(value) => setFormData({ ...formData, siteAddress: value })}
+                placeholder="Enter site address"
+                showStreetView={true}
+                data-testid="input-edit-job-address"
               />
             </div>
             <div className="space-y-2">
@@ -974,12 +1126,12 @@ export default function Jobs() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="new-job-address">Site Address</Label>
-              <Input 
-                id="new-job-address" 
-                placeholder="Enter site address" 
+              <AddressAutocomplete
                 value={newJobData.siteAddress}
-                onChange={(e) => setNewJobData({ ...newJobData, siteAddress: e.target.value })}
-                data-testid="input-new-job-address" 
+                onChange={(value) => setNewJobData({ ...newJobData, siteAddress: value })}
+                placeholder="Enter site address"
+                showStreetView={true}
+                data-testid="input-new-job-address"
               />
             </div>
             <div className="space-y-2">

@@ -264,6 +264,10 @@ export const clients = pgTable("clients", {
   companyName: text("company_name"),
   abn: text("abn"),
   notes: text("notes"),
+  // ServiceM8 integration fields
+  servicem8Uuid: text("servicem8_uuid").unique(),
+  servicem8CompanyUuid: text("servicem8_company_uuid"),
+  servicem8SyncedAt: timestamp("servicem8_synced_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -298,6 +302,11 @@ export const leads = pgTable("leads", {
   soilInstallNotes: text("soil_install_notes"), // Full installation notes
   siteLatitude: decimal("site_latitude", { precision: 10, scale: 7 }),
   siteLongitude: decimal("site_longitude", { precision: 10, scale: 7 }),
+  // ServiceM8 integration fields
+  servicem8Uuid: text("servicem8_uuid").unique(),
+  servicem8JobId: text("servicem8_job_id"), // The generated_job_id from ServiceM8
+  servicem8Status: text("servicem8_status"), // Original status from ServiceM8
+  servicem8SyncedAt: timestamp("servicem8_synced_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -448,6 +457,11 @@ export const jobs = pgTable("jobs", {
   pipelineId: varchar("pipeline_id").references(() => jobPipelines.id),
   isWaitingOnClient: boolean("is_waiting_on_client").default(false),
   stagesCompleted: jsonb("stages_completed").$type<number[]>().default([]),
+  // ServiceM8 integration fields
+  servicem8Uuid: text("servicem8_uuid").unique(),
+  servicem8JobId: text("servicem8_job_id"), // The generated_job_id from ServiceM8
+  servicem8Status: text("servicem8_status"), // Original status from ServiceM8
+  servicem8SyncedAt: timestamp("servicem8_synced_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -460,6 +474,19 @@ export type JobPhoto = {
   uploadedAt: string;
   uploadedBy: string;
 };
+
+// ServiceM8 History Notes table - imported notes from ServiceM8
+export const servicem8Notes = pgTable("servicem8_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => jobs.id),
+  leadId: varchar("lead_id").references(() => leads.id),
+  servicem8Uuid: text("servicem8_uuid").notNull().unique(),
+  servicem8JobUuid: text("servicem8_job_uuid").notNull(),
+  note: text("note").notNull(),
+  staffUuid: text("staff_uuid"),
+  createdDate: timestamp("created_date").notNull(),
+  importedAt: timestamp("imported_at").notNull().defaultNow(),
+});
 
 // Bill of Materials (BOM) table
 export const bom = pgTable("bom", {

@@ -15,7 +15,8 @@ import { Progress } from "@/components/ui/progress";
 import {
   Upload, Download, FileSpreadsheet, Users, ClipboardList, Briefcase,
   CheckCircle2, AlertCircle, Loader2, X, FileText, Package,
-  History, Settings2, FileJson, DollarSign, Receipt
+  History, Settings2, FileJson, DollarSign, Receipt, RefreshCw,
+  Wifi, WifiOff, CloudDownload, Database
 } from "lucide-react";
 
 interface ParsedRow {
@@ -719,6 +720,482 @@ function ImportHistoryTab() {
   );
 }
 
+// ServiceM8 Live Sync Tab - Direct API connection
+function ServiceM8SyncTab() {
+  const { toast } = useToast();
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0, entity: "" });
+
+  // Test connection query
+  const { data: connectionStatus, isLoading: isTestingConnection, refetch: testConnection } = useQuery({
+    queryKey: ["/api/servicem8/test"],
+    enabled: false,
+    retry: false,
+  });
+
+  // Preview queries - only run when requested
+  const { data: previewJobs, isLoading: isLoadingJobs, refetch: fetchJobs } = useQuery<{
+    total: number;
+    leads: number;
+    jobs: number;
+    preview: Array<{
+      uuid: string;
+      probuildId: string;
+      entityType: string;
+      status: string;
+      address: string;
+      description: string;
+      total: string;
+    }>;
+  }>({
+    queryKey: ["/api/servicem8/preview/jobs"],
+    enabled: false,
+  });
+
+  const { data: previewClients, isLoading: isLoadingClients, refetch: fetchClients } = useQuery<{
+    total: number;
+    preview: Array<{
+      uuid: string;
+      name: string;
+      email: string;
+      phone: string;
+      company: string;
+    }>;
+  }>({
+    queryKey: ["/api/servicem8/preview/clients"],
+    enabled: false,
+  });
+
+  const { data: previewNotes, isLoading: isLoadingNotes, refetch: fetchNotes } = useQuery<{
+    total: number;
+    preview: Array<{
+      uuid: string;
+      jobUuid: string;
+      note: string;
+      createdDate: string;
+    }>;
+  }>({
+    queryKey: ["/api/servicem8/preview/notes"],
+    enabled: false,
+  });
+
+  // Import mutations
+  const importClientsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/servicem8/import/clients");
+      return response.json();
+    },
+    onSuccess: (result: { imported: number; skipped: number; errors: string[] }) => {
+      toast({
+        title: "Clients Imported",
+        description: `Imported ${result.imported} clients. ${result.skipped} already existed.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/import/sessions"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Import Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const importJobsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/servicem8/import/jobs");
+      return response.json();
+    },
+    onSuccess: (result: { leadsImported: number; jobsImported: number; skipped: number; errors: string[] }) => {
+      toast({
+        title: "Jobs Imported",
+        description: `Imported ${result.leadsImported} leads and ${result.jobsImported} jobs. ${result.skipped} already existed.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/import/sessions"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Import Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const importNotesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/servicem8/import/notes");
+      return response.json();
+    },
+    onSuccess: (result: { imported: number; skipped: number }) => {
+      toast({
+        title: "Notes Imported",
+        description: `Imported ${result.imported} historical notes. ${result.skipped} already existed.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/import/sessions"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Import Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleTestConnection = async () => {
+    await testConnection();
+  };
+
+  const handlePreviewAll = async () => {
+    await Promise.all([fetchJobs(), fetchClients(), fetchNotes()]);
+  };
+
+  const handleImportAll = async () => {
+    setImportProgress({ current: 0, total: 3, entity: "clients" });
+    await importClientsMutation.mutateAsync();
+    setImportProgress({ current: 1, total: 3, entity: "jobs" });
+    await importJobsMutation.mutateAsync();
+    setImportProgress({ current: 2, total: 3, entity: "notes" });
+    await importNotesMutation.mutateAsync();
+    setImportProgress({ current: 3, total: 3, entity: "complete" });
+    toast({
+      title: "Full Sync Complete",
+      description: "All ServiceM8 data has been imported to Probuild.",
+    });
+  };
+
+  const isConnected = connectionStatus && (connectionStatus as any).success;
+  const isImporting = importClientsMutation.isPending || importJobsMutation.isPending || importNotesMutation.isPending;
+
+  return (
+    <div className="space-y-6">
+      {/* Connection Status Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {isConnected ? (
+              <Wifi className="h-5 w-5 text-green-600" />
+            ) : (
+              <WifiOff className="h-5 w-5 text-muted-foreground" />
+            )}
+            ServiceM8 Connection
+          </CardTitle>
+          <CardDescription>
+            Connect to ServiceM8 to import clients, jobs, and historical notes
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="flex items-center gap-3">
+              <Database className="h-8 w-8 text-muted-foreground" />
+              <div>
+                <p className="font-medium">API Status</p>
+                {connectionStatus ? (
+                  <p className="text-sm text-muted-foreground">
+                    {isConnected
+                      ? `Connected - ${(connectionStatus as any).jobCount} jobs found`
+                      : (connectionStatus as any).message
+                    }
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Click to test connection</p>
+                )}
+              </div>
+            </div>
+            <Button
+              onClick={handleTestConnection}
+              disabled={isTestingConnection}
+              variant={isConnected ? "outline" : "default"}
+            >
+              {isTestingConnection ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Test Connection
+                </>
+              )}
+            </Button>
+          </div>
+
+          {isConnected && (
+            <Alert className="bg-green-50 border-green-200">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertTitle className="text-green-800">Connected to ServiceM8</AlertTitle>
+              <AlertDescription className="text-green-700">
+                Ready to import data. Use the preview buttons below to see what will be imported.
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Quick Actions */}
+      {isConnected && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CloudDownload className="h-5 w-5" />
+              Quick Actions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button
+                variant="outline"
+                className="h-auto py-4"
+                onClick={handlePreviewAll}
+                disabled={isLoadingJobs || isLoadingClients || isLoadingNotes}
+              >
+                <div className="flex flex-col items-center">
+                  {isLoadingJobs || isLoadingClients || isLoadingNotes ? (
+                    <Loader2 className="h-6 w-6 animate-spin mb-2" />
+                  ) : (
+                    <FileText className="h-6 w-6 mb-2" />
+                  )}
+                  <span className="font-medium">Preview All Data</span>
+                  <span className="text-xs text-muted-foreground">See what will be imported</span>
+                </div>
+              </Button>
+              <Button
+                className="h-auto py-4"
+                onClick={handleImportAll}
+                disabled={isImporting}
+              >
+                <div className="flex flex-col items-center">
+                  {isImporting ? (
+                    <Loader2 className="h-6 w-6 animate-spin mb-2" />
+                  ) : (
+                    <CloudDownload className="h-6 w-6 mb-2" />
+                  )}
+                  <span className="font-medium">Full Sync</span>
+                  <span className="text-xs text-muted-foreground">Import everything from ServiceM8</span>
+                </div>
+              </Button>
+            </div>
+
+            {isImporting && (
+              <div className="space-y-2">
+                <Progress value={(importProgress.current / importProgress.total) * 100} />
+                <p className="text-sm text-center text-muted-foreground">
+                  Importing {importProgress.entity}... ({importProgress.current}/{importProgress.total})
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Import Sections */}
+      {isConnected && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Clients */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Clients
+              </CardTitle>
+              <CardDescription>
+                {previewClients
+                  ? `${previewClients.total} clients found`
+                  : "Click preview to see available clients"
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {previewClients && previewClients.preview.length > 0 && (
+                <ScrollArea className="h-[200px] border rounded-lg p-2">
+                  {previewClients.preview.map((client, i) => (
+                    <div key={i} className="py-2 border-b last:border-0">
+                      <p className="font-medium text-sm">{client.name}</p>
+                      <p className="text-xs text-muted-foreground">{client.email || client.phone}</p>
+                      {client.company && (
+                        <p className="text-xs text-muted-foreground">{client.company}</p>
+                      )}
+                    </div>
+                  ))}
+                  {previewClients.total > 10 && (
+                    <p className="text-xs text-center text-muted-foreground pt-2">
+                      ...and {previewClients.total - 10} more
+                    </p>
+                  )}
+                </ScrollArea>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => fetchClients()}
+                  disabled={isLoadingClients}
+                >
+                  {isLoadingClients ? <Loader2 className="h-4 w-4 animate-spin" /> : "Preview"}
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => importClientsMutation.mutate()}
+                  disabled={importClientsMutation.isPending}
+                >
+                  {importClientsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Import"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Jobs/Leads */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Briefcase className="h-5 w-5" />
+                Jobs & Leads
+              </CardTitle>
+              <CardDescription>
+                {previewJobs
+                  ? `${previewJobs.leads} leads, ${previewJobs.jobs} jobs found`
+                  : "Click preview to see available jobs"
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {previewJobs && previewJobs.preview.length > 0 && (
+                <ScrollArea className="h-[200px] border rounded-lg p-2">
+                  {previewJobs.preview.map((job, i) => (
+                    <div key={i} className="py-2 border-b last:border-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-medium">{job.probuildId}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {job.entityType}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{job.address}</p>
+                      <p className="text-xs text-muted-foreground">{job.status} - ${job.total}</p>
+                    </div>
+                  ))}
+                  {previewJobs.total > 10 && (
+                    <p className="text-xs text-center text-muted-foreground pt-2">
+                      ...and {previewJobs.total - 10} more
+                    </p>
+                  )}
+                </ScrollArea>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => fetchJobs()}
+                  disabled={isLoadingJobs}
+                >
+                  {isLoadingJobs ? <Loader2 className="h-4 w-4 animate-spin" /> : "Preview"}
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => importJobsMutation.mutate()}
+                  disabled={importJobsMutation.isPending}
+                >
+                  {importJobsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Import"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Notes */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Historical Notes
+              </CardTitle>
+              <CardDescription>
+                {previewNotes
+                  ? `${previewNotes.total} notes found`
+                  : "Click preview to see available notes"
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {previewNotes && previewNotes.preview.length > 0 && (
+                <ScrollArea className="h-[200px] border rounded-lg p-2">
+                  {previewNotes.preview.map((note, i) => (
+                    <div key={i} className="py-2 border-b last:border-0">
+                      <p className="text-sm line-clamp-2">{note.note}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(note.createdDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                  ))}
+                  {previewNotes.total > 10 && (
+                    <p className="text-xs text-center text-muted-foreground pt-2">
+                      ...and {previewNotes.total - 10} more
+                    </p>
+                  )}
+                </ScrollArea>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => fetchNotes()}
+                  disabled={isLoadingNotes}
+                >
+                  {isLoadingNotes ? <Loader2 className="h-4 w-4 animate-spin" /> : "Preview"}
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => importNotesMutation.mutate()}
+                  disabled={importNotesMutation.isPending}
+                >
+                  {importNotesMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Import"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Job Numbering Info */}
+      <Card>
+        <CardHeader>
+          <CardTitle>PVC Job Numbering</CardTitle>
+          <CardDescription>How ServiceM8 jobs are numbered in Probuild</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 border rounded-lg">
+              <h4 className="font-medium mb-2">Leads (Quotes)</h4>
+              <p className="text-sm text-muted-foreground mb-2">
+                ServiceM8 "Quote" and "Unsuccessful" status
+              </p>
+              <code className="block bg-muted p-2 rounded text-sm">PVC-XXX</code>
+              <p className="text-xs text-muted-foreground mt-1">
+                Example: PVC-045, PVC-612
+              </p>
+            </div>
+            <div className="p-4 border rounded-lg">
+              <h4 className="font-medium mb-2">Jobs (Active/Completed)</h4>
+              <p className="text-sm text-muted-foreground mb-2">
+                ServiceM8 "Work Order" and "Completed" status
+              </p>
+              <code className="block bg-muted p-2 rounded text-sm">PVC-XXX-JOB</code>
+              <p className="text-xs text-muted-foreground mt-1">
+                Example: PVC-045-JOB, PVC-612-JOB
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function ServiceM8MappingTab() {
   return (
     <Card>
@@ -793,8 +1270,12 @@ export default function Import() {
         </p>
       </div>
 
-      <Tabs defaultValue="clients" className="w-full">
+      <Tabs defaultValue="servicem8-sync" className="w-full">
         <TabsList className="flex flex-wrap h-auto gap-1">
+          <TabsTrigger value="servicem8-sync" data-testid="tab-servicem8-sync" className="bg-primary/10">
+            <Wifi className="h-4 w-4 mr-2" />
+            ServiceM8 Sync
+          </TabsTrigger>
           <TabsTrigger value="clients" data-testid="tab-import-clients">
             <Users className="h-4 w-4 mr-2" />
             Clients
@@ -828,6 +1309,10 @@ export default function Import() {
             Field Mapping
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="servicem8-sync" className="mt-6">
+          <ServiceM8SyncTab />
+        </TabsContent>
 
         <TabsContent value="clients" className="mt-6">
           <ImportTab type="clients" template={clientTemplate} icon={Users} isServiceM8 />

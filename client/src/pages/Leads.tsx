@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
+import { AddressAutocomplete, SitePreview } from "@/components/ui/address-autocomplete";
 import { KanbanBoard } from "@/components/leads/KanbanBoard";
 import { QuoteBuilder } from "@/components/quotes/QuoteBuilder";
 import {
@@ -1224,6 +1224,7 @@ export default function Leads() {
                   <div>
                     <span className="text-sm text-muted-foreground">Site Address:</span>
                     <div className="font-medium">{selectedQuote.siteAddress}</div>
+                    <SitePreview address={selectedQuote.siteAddress || ""} />
                   </div>
                 </CardContent>
               </Card>

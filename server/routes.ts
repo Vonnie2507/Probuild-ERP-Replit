@@ -7000,6 +7000,486 @@ export async function registerRoutes(
   });
 
   // ==========================================
+  // SERVICEM8 INTEGRATION
+  // ==========================================
+
+  // Test ServiceM8 connection
+  app.get("/api/servicem8/test", requireRoles("admin"), async (req, res) => {
+    try {
+      const {
+        testServiceM8Connection
+      } = await import("./servicem8");
+
+      const result = await testServiceM8Connection();
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error testing ServiceM8 connection:", error);
+      res.status(500).json({ success: false, message: error.message || "Connection test failed" });
+    }
+  });
+
+  // Get all jobs from ServiceM8 (preview before import)
+  app.get("/api/servicem8/jobs", requireRoles("admin"), async (req, res) => {
+    try {
+      const {
+        getServiceM8Jobs, generateProbuildId, mapServiceM8Status, mapJobCategory
+      } = await import("./servicem8");
+
+      const sm8Jobs = await getServiceM8Jobs();
+
+      // Map to Probuild format for preview
+      const mappedJobs = sm8Jobs.map(job => ({
+        servicem8_uuid: job.uuid,
+        servicem8_id: job.generated_job_id,
+        probuild_id: generateProbuildId(job),
+        status: job.status,
+        mapping: mapServiceM8Status(job.status),
+        category: job.job_category,
+        categoryMapping: mapJobCategory(job.job_category),
+        address: job.job_address,
+        description: job.job_description,
+        total: job.total_inc_tax,
+        date: job.date,
+        company_uuid: job.company_uuid,
+      }));
+
+      res.json({
+        count: mappedJobs.length,
+        jobs: mappedJobs,
+      });
+    } catch (error: any) {
+      console.error("Error fetching ServiceM8 jobs:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch ServiceM8 jobs" });
+    }
+  });
+
+  // Get all clients from ServiceM8 (preview before import)
+  app.get("/api/servicem8/clients", requireRoles("admin"), async (req, res) => {
+    try {
+      const {
+        getServiceM8Clients, getServiceM8Companies
+      } = await import("./servicem8");
+
+      const [contacts, companies] = await Promise.all([
+        getServiceM8Clients(),
+        getServiceM8Companies(),
+      ]);
+
+      // Create a map of companies by UUID
+      const companyMap = new Map(companies.map(c => [c.uuid, c]));
+
+      // Map contacts to Probuild format
+      const mappedClients = contacts.map(contact => {
+        const company = companyMap.get(contact.company_uuid);
+        return {
+          servicem8_uuid: contact.uuid,
+          company_uuid: contact.company_uuid,
+          name: `${contact.first} ${contact.last}`.trim(),
+          firstName: contact.first,
+          lastName: contact.last,
+          email: contact.email,
+          phone: contact.phone || contact.mobile,
+          mobile: contact.mobile,
+          companyName: company?.name || null,
+          address: company ? `${company.address_street}, ${company.address_city} ${company.address_state} ${company.address_postcode}`.trim() : null,
+          abn: company?.abn || null,
+        };
+      });
+
+      res.json({
+        count: mappedClients.length,
+        clients: mappedClients,
+        companiesCount: companies.length,
+      });
+    } catch (error: any) {
+      console.error("Error fetching ServiceM8 clients:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch ServiceM8 clients" });
+    }
+  });
+
+  // Get notes from ServiceM8
+  app.get("/api/servicem8/notes", requireRoles("admin"), async (req, res) => {
+    try {
+      const { jobUuid } = req.query;
+      const { getServiceM8Notes } = await import("./servicem8");
+
+      const notes = await getServiceM8Notes(jobUuid as string | undefined);
+
+      res.json({
+        count: notes.length,
+        notes: notes.map(note => ({
+          servicem8_uuid: note.uuid,
+          related_object_uuid: note.related_object_uuid,
+          note: note.note,
+          date: note.create_date,
+        })),
+      });
+    } catch (error: any) {
+      console.error("Error fetching ServiceM8 notes:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch ServiceM8 notes" });
+    }
+  });
+
+  // Import clients from ServiceM8
+  app.post("/api/servicem8/import/clients", requireRoles("admin"), async (req, res) => {
+    try {
+      const { getServiceM8Clients, getServiceM8Companies } = await import("./servicem8");
+
+      const [contacts, companies] = await Promise.all([
+        getServiceM8Clients(),
+        getServiceM8Companies(),
+      ]);
+
+      const companyMap = new Map(companies.map(c => [c.uuid, c]));
+
+      // Create import session
+      const [session] = await db.insert(importSessions).values({
+        source: "servicem8",
+        entityType: "clients",
+        status: "processing",
+        totalRows: contacts.length,
+        importedBy: (req as any).user?.id || null,
+        startedAt: new Date(),
+      }).returning();
+
+      let success = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (const contact of contacts) {
+        try {
+          const company = companyMap.get(contact.company_uuid);
+          const name = `${contact.first} ${contact.last}`.trim();
+
+          if (!name) {
+            errors.push(`Skipped contact with no name (UUID: ${contact.uuid})`);
+            failed++;
+            continue;
+          }
+
+          // Check if client already exists by email or phone
+          let existingClient = null;
+          if (contact.email) {
+            existingClient = await storage.findClientByEmail(contact.email);
+          }
+
+          if (!existingClient && (contact.phone || contact.mobile)) {
+            existingClient = await storage.findClientByPhone(contact.phone || contact.mobile);
+          }
+
+          if (existingClient) {
+            // Update existing client
+            await storage.updateClient(existingClient.id, {
+              name,
+              email: contact.email || existingClient.email,
+              phone: contact.mobile || contact.phone || existingClient.phone,
+              address: company ? `${company.address_street}, ${company.address_city} ${company.address_state} ${company.address_postcode}`.trim() : existingClient.address,
+              companyName: company?.name || existingClient.companyName,
+              abn: company?.abn || existingClient.abn,
+              servicem8Uuid: contact.uuid,
+            });
+            success++;
+          } else {
+            // Create new client
+            await storage.createClient({
+              name,
+              email: contact.email || null,
+              phone: contact.mobile || contact.phone || null,
+              address: company ? `${company.address_street}, ${company.address_city} ${company.address_state} ${company.address_postcode}`.trim() : null,
+              clientType: "public",
+              companyName: company?.name || null,
+              abn: company?.abn || null,
+              servicem8Uuid: contact.uuid,
+            });
+            success++;
+          }
+        } catch (err: any) {
+          failed++;
+          errors.push(`Failed to import ${contact.first} ${contact.last}: ${err.message}`);
+        }
+      }
+
+      // Update session
+      await db.update(importSessions)
+        .set({
+          status: failed > 0 && success > 0 ? "completed_with_errors" : failed > 0 ? "failed" : "completed",
+          processedRows: success + failed,
+          successCount: success,
+          errorCount: failed,
+          errorLog: errors.length > 0 ? errors : null,
+          completedAt: new Date(),
+        })
+        .where(eq(importSessions.id, session.id));
+
+      res.json({ success, failed, errors, sessionId: session.id });
+    } catch (error: any) {
+      console.error("Error importing ServiceM8 clients:", error);
+      res.status(500).json({ error: error.message || "Failed to import clients" });
+    }
+  });
+
+  // Import jobs from ServiceM8
+  app.post("/api/servicem8/import/jobs", requireRoles("admin"), async (req, res) => {
+    try {
+      const {
+        getServiceM8Jobs, getServiceM8Companies, getServiceM8Clients,
+        generateProbuildId, mapServiceM8Status, mapJobCategory
+      } = await import("./servicem8");
+
+      const [sm8Jobs, companies, contacts] = await Promise.all([
+        getServiceM8Jobs(),
+        getServiceM8Companies(),
+        getServiceM8Clients(),
+      ]);
+
+      const companyMap = new Map(companies.map(c => [c.uuid, c]));
+
+      // Create import session
+      const [session] = await db.insert(importSessions).values({
+        source: "servicem8",
+        entityType: "jobs",
+        status: "processing",
+        totalRows: sm8Jobs.length,
+        importedBy: (req as any).user?.id || null,
+        startedAt: new Date(),
+      }).returning();
+
+      let success = 0;
+      let failed = 0;
+      let leadsCreated = 0;
+      let jobsCreated = 0;
+      const errors: string[] = [];
+
+      for (const sm8Job of sm8Jobs) {
+        try {
+          const probuildId = generateProbuildId(sm8Job);
+          const { entityType, probuildStatus } = mapServiceM8Status(sm8Job.status);
+          const { jobType, leadType } = mapJobCategory(sm8Job.job_category);
+
+          // Find or create client from company
+          const company = companyMap.get(sm8Job.company_uuid);
+          let client = null;
+
+          if (company) {
+            // Try to find existing client
+            client = await storage.findClientByName(company.name);
+
+            if (!client) {
+              // Create client from company
+              client = await storage.createClient({
+                name: company.name,
+                email: company.email || null,
+                phone: company.mobile || company.phone || null,
+                address: `${company.address_street}, ${company.address_city} ${company.address_state} ${company.address_postcode}`.trim(),
+                clientType: leadType === "trade" ? "trade" : "public",
+                abn: company.abn || null,
+                servicem8Uuid: company.uuid,
+              });
+            }
+          }
+
+          if (entityType === "lead") {
+            // Create as Lead
+            const lead = await storage.createLead({
+              clientId: client?.id || null,
+              siteAddress: sm8Job.job_address || "Address not provided",
+              source: "other",
+              leadType: leadType,
+              jobFulfillmentType: jobType,
+              description: sm8Job.job_description || `Imported from ServiceM8 (${sm8Job.job_category})`,
+              stage: probuildStatus === "lost" ? "lost" : "needs_quote",
+              estimatedValue: sm8Job.total_inc_tax ? parseFloat(sm8Job.total_inc_tax) : null,
+              servicem8Uuid: sm8Job.uuid,
+              servicem8JobId: sm8Job.generated_job_id,
+            });
+
+            // Update lead number to match PVC format
+            await storage.updateLead(lead.id, {
+              leadNumber: probuildId,
+            });
+
+            leadsCreated++;
+          } else {
+            // Create as Job (need to create lead first for workflow)
+            const lead = await storage.createLead({
+              clientId: client?.id || null,
+              siteAddress: sm8Job.job_address || "Address not provided",
+              source: "other",
+              leadType: leadType,
+              jobFulfillmentType: jobType,
+              description: sm8Job.job_description || `Imported from ServiceM8 (${sm8Job.job_category})`,
+              stage: "won",
+              estimatedValue: sm8Job.total_inc_tax ? parseFloat(sm8Job.total_inc_tax) : null,
+              servicem8Uuid: sm8Job.uuid,
+              servicem8JobId: sm8Job.generated_job_id,
+            });
+
+            // Update lead number
+            await storage.updateLead(lead.id, {
+              leadNumber: `PVC-${sm8Job.generated_job_id.padStart(3, "0")}`,
+            });
+
+            // Create the job
+            const job = await storage.createJob({
+              leadId: lead.id,
+              clientId: client?.id || null,
+              siteAddress: sm8Job.job_address || "Address not provided",
+              jobType: jobType,
+              status: probuildStatus as any,
+              totalPrice: sm8Job.total_inc_tax || "0",
+              notes: sm8Job.job_description || null,
+              servicem8Uuid: sm8Job.uuid,
+              servicem8JobId: sm8Job.generated_job_id,
+            });
+
+            // Update job number to match PVC format
+            await storage.updateJob(job.id, {
+              jobNumber: probuildId,
+            });
+
+            jobsCreated++;
+          }
+
+          success++;
+        } catch (err: any) {
+          failed++;
+          errors.push(`Failed to import job ${sm8Job.generated_job_id}: ${err.message}`);
+        }
+      }
+
+      // Update session
+      await db.update(importSessions)
+        .set({
+          status: failed > 0 && success > 0 ? "completed_with_errors" : failed > 0 ? "failed" : "completed",
+          processedRows: success + failed,
+          successCount: success,
+          errorCount: failed,
+          errorLog: errors.length > 0 ? errors : null,
+          completedAt: new Date(),
+        })
+        .where(eq(importSessions.id, session.id));
+
+      res.json({
+        success,
+        failed,
+        leadsCreated,
+        jobsCreated,
+        errors,
+        sessionId: session.id,
+      });
+    } catch (error: any) {
+      console.error("Error importing ServiceM8 jobs:", error);
+      res.status(500).json({ error: error.message || "Failed to import jobs" });
+    }
+  });
+
+  // Import notes from ServiceM8
+  app.post("/api/servicem8/import/notes", requireRoles("admin"), async (req, res) => {
+    try {
+      const { getServiceM8Notes, getServiceM8Jobs } = await import("./servicem8");
+
+      const [notes, jobs] = await Promise.all([
+        getServiceM8Notes(),
+        getServiceM8Jobs(),
+      ]);
+
+      // Create a map of ServiceM8 job UUID to Probuild job/lead
+      const sm8JobMap = new Map(jobs.map(j => [j.uuid, j]));
+
+      let success = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (const note of notes) {
+        try {
+          const sm8Job = sm8JobMap.get(note.related_object_uuid);
+          if (!sm8Job) {
+            continue; // Skip notes not related to jobs
+          }
+
+          // Find the corresponding Probuild lead or job
+          const leads = await storage.getLeads();
+          const leadMatch = leads.find((l: any) => l.servicem8Uuid === note.related_object_uuid);
+
+          if (leadMatch) {
+            // Create lead activity for the note
+            await storage.createLeadActivity({
+              leadId: leadMatch.id,
+              activityType: "note_added",
+              title: "ServiceM8 Note",
+              description: note.note,
+              createdAt: new Date(note.create_date),
+              isFromServicem8: true,
+              servicem8Uuid: note.uuid,
+            });
+            success++;
+          } else {
+            // Try to find as job
+            const allJobs = await storage.getJobs();
+            const jobMatch = allJobs.find((j: any) => j.servicem8Uuid === note.related_object_uuid);
+
+            if (jobMatch) {
+              // Add note to job (store in job notes or activity log)
+              const existingNotes = jobMatch.notes || "";
+              const newNote = `\n\n[ServiceM8 ${new Date(note.create_date).toLocaleDateString()}]: ${note.note}`;
+              await storage.updateJob(jobMatch.id, {
+                notes: existingNotes + newNote,
+              });
+              success++;
+            }
+          }
+        } catch (err: any) {
+          failed++;
+          errors.push(`Failed to import note: ${err.message}`);
+        }
+      }
+
+      res.json({ success, failed, errors, totalNotes: notes.length });
+    } catch (error: any) {
+      console.error("Error importing ServiceM8 notes:", error);
+      res.status(500).json({ error: error.message || "Failed to import notes" });
+    }
+  });
+
+  // Get the highest job number (for new job numbering)
+  app.get("/api/servicem8/next-number", async (req, res) => {
+    try {
+      const leads = await storage.getLeads();
+      const jobs = await storage.getJobs();
+
+      let highestNumber = 0;
+
+      // Check leads
+      for (const lead of leads) {
+        const match = (lead as any).leadNumber?.match(/PVC-(\d+)/);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num > highestNumber) highestNumber = num;
+        }
+      }
+
+      // Check jobs
+      for (const job of jobs) {
+        const match = (job as any).jobNumber?.match(/PVC-(\d+)/);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num > highestNumber) highestNumber = num;
+        }
+      }
+
+      const nextNumber = highestNumber + 1;
+      res.json({
+        highestNumber,
+        nextLeadNumber: `PVC-${String(nextNumber).padStart(3, "0")}`,
+        nextJobNumber: `PVC-${String(nextNumber).padStart(3, "0")}-JOB`,
+      });
+    } catch (error: any) {
+      console.error("Error getting next number:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ==========================================
   // JOB PIPELINE CONFIGURATION
   // ==========================================
 
